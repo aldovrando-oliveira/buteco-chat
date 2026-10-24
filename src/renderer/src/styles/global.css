@@ -1,0 +1,15 @@
+/* Antes de o React montar ainda não existe data-mantine-color-scheme; este fundo cobre esse intervalo (design D10). */
+html {
+  background-color: #f6f5f3;
+}
+
+@media (prefers-color-scheme: dark) {
+  html {
+    background-color: #121316;
+  }
+}
+
+/* Sem o atributo de esquema a variável fica indefinida e o body fica transparente, deixando ver o fundo do html. */
+body {
+  background-color: var(--buteco-color-page);
+}
