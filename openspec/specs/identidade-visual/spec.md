@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Aplicar a identidade visual da plataforma Buteco Agentes no renderer: tema Mantine (cores, fontes, tamanhos, raios), esquemas claro e escuro, fundo da página distinto das superfícies, contraste mínimo e fontes IBM Plex empacotadas.
+Aplicar a identidade visual da plataforma Buteco Agentes no renderer: tema Mantine (cores, fontes, tamanhos, raios), esquemas claro e escuro, fundo da página distinto das superfícies, contraste mínimo (inclusive das mensagens de erro e de aviso), fontes IBM Plex empacotadas e interface em pt-BR.
 
 ## Requirements
 
@@ -14,7 +14,7 @@ O renderer SHALL usar um `MantineProvider` com tema contendo as escalas `butecoB
 - **THEN** as seis escalas, o `primaryShade`, os tamanhos de fonte, as alturas de linha, os títulos e os raios são iguais aos do documento de construção
 
 ### Requirement: Esquema de cor segue o sistema
-O app SHALL seguir `prefers-color-scheme` (`defaultColorScheme: 'auto'`), sem seletor manual de tema nesta change.
+O app SHALL seguir `prefers-color-scheme` (`defaultColorScheme: 'auto'`), sem seletor manual de tema.
 
 #### Scenario: Sistema em modo escuro
 - **WHEN** o sistema operacional está em modo escuro e o app abre
@@ -24,12 +24,12 @@ O app SHALL seguir `prefers-color-scheme` (`defaultColorScheme: 'auto'`), sem se
 O fundo da página SHALL ser `#f6f5f3` no claro e `#121316` no escuro, definido por uma variável própria (`--buteco-color-page`) aplicada ao `body`. A variável `--mantine-color-body`, que o Mantine usa como fundo de `Paper`, `Card`, `Modal` e outros, MUST continuar como superfície: branco no claro e `dark[7]` no escuro.
 
 #### Scenario: Página e cartão no claro
-- **WHEN** a tela-casca é renderizada no esquema claro
-- **THEN** o `body` tem fundo `#f6f5f3` e a superfície usa `--mantine-color-body` branco
+- **WHEN** a tela de login é renderizada no esquema claro
+- **THEN** o `body` tem fundo `#f6f5f3` e o cartão usa `--mantine-color-body` branco
 
 #### Scenario: Página e cartão no escuro
-- **WHEN** a tela-casca é renderizada no esquema escuro
-- **THEN** o `body` tem fundo `#121316` e a superfície usa `dark[7]`
+- **WHEN** a tela de login é renderizada no esquema escuro
+- **THEN** o `body` tem fundo `#121316` e o cartão usa `dark[7]`
 
 ### Requirement: Primário preenchido legível no escuro
 No esquema escuro, a cor de fundo de `variant="filled"` da cor primária SHALL ser `butecoBlue[6]` (hover `butecoBlue[7]`). Os demais usos do primário no escuro (texto, `light`, `outline`, âncoras) MUST continuar derivados de `primaryShade.dark = 4`.
@@ -57,7 +57,7 @@ O app SHALL usar IBM Plex Sans como fonte de texto e IBM Plex Mono como fonte mo
 - **THEN** os arquivos CSS e JS gerados não contêm URLs `data:`, e os `.woff2` das fontes existem como arquivos no diretório de assets
 
 #### Scenario: Fontes aplicadas no app empacotado
-- **WHEN** o app empacotado abre a tela-casca
+- **WHEN** o app empacotado abre a tela de login (cujo endereço do serviço usa Plex Mono)
 - **THEN** depois de `await document.fonts.ready`, `document.fonts` contém ao menos uma `FontFace` com família "IBM Plex Sans" e uma com "IBM Plex Mono" em `status === 'loaded'`, e nenhuma violação de CSP de fonte aparece no console (`document.fonts.check` sozinho não serve, porque devolve `true` para famílias não registradas)
 
 ### Requirement: Rótulos de seção
@@ -67,9 +67,16 @@ O tema SHALL oferecer um estilo reutilizável para rótulos de seção: 11px, ca
 - **WHEN** um rótulo de seção é renderizado
 - **THEN** ele tem `font-size: 11px`, `text-transform: uppercase` e `letter-spacing: 0.05em`
 
-### Requirement: Tela-casca
-Nesta change o renderer SHALL exibir uma tela com a marca "Buteco Chat" centralizada sobre o fundo da página, numa superfície que mostra um texto em Plex Sans, um identificador em Plex Mono, um texto secundário e um botão primário preenchido, para validar tema, fontes e CSP. A interface MUST estar em pt-BR.
+### Requirement: Interface em pt-BR
+A interface SHALL estar em pt-BR, e o `index.html` MUST declarar `lang="pt-BR"`.
 
-#### Scenario: Casca renderizada
+#### Scenario: Idioma do documento
 - **WHEN** o renderer monta o app
-- **THEN** a marca "Buteco Chat" está visível e o documento tem `lang="pt-BR"`
+- **THEN** o documento tem `lang="pt-BR"`
+
+### Requirement: Cores de erro e de aviso com contraste mínimo
+O texto do bloco de erro SHALL usar a variável `--buteco-color-error-text` (`red[9]` no claro, `red[4]` no escuro) sobre `--mantine-color-red-light`. O texto de aviso SHALL usar `--buteco-color-warning-text` (`yellow[7]` no claro, `yellow[4]` no escuro). A mensagem de validação de campo SHALL usar `--mantine-color-red-text`. Os três MUST ter contraste de no mínimo 4,5:1 sobre o seu fundo (bloco de erro, superfície e superfície, respectivamente), em cada esquema.
+
+#### Scenario: Contraste das mensagens
+- **WHEN** o teste resolve, a partir do tema e do resolvedor de variáveis CSS, as cores de texto e de fundo do bloco de erro, do aviso e da mensagem de validação, nos dois esquemas
+- **THEN** os seis contrastes são de no mínimo 4,5:1

@@ -92,7 +92,7 @@ Cada `login` e cada `logout` SHALL abortar a chamada de login em andamento. A re
 - **THEN** `status()` devolve `authenticated: false` com os demais campos `null`, e `getToken()` devolve `null`
 
 ### Requirement: Token nunca cruza a ponte
-`getToken()` SHALL existir só no main, para uso das próximas changes, e MUST NOT ter canal IPC. Nenhum valor devolvido ao renderer (resultado de `login`, de `status` ou mensagem de erro) MUST conter o token.
+`getToken()` SHALL existir só no main, para as chamadas autenticadas feitas pelo main, e MUST NOT ter canal IPC. Nenhum valor devolvido ao renderer (resultado de `login`, de `status` ou mensagem de erro) MUST conter o token.
 
 #### Scenario: Resultado do login sem token
 - **WHEN** um login bem-sucedido devolve o resultado pelo canal `auth:login`
@@ -103,7 +103,7 @@ Cada `login` e cada `logout` SHALL abortar a chamada de login em andamento. A re
 - **THEN** elas são exatamente `login`, `logout` e `status`
 
 ### Requirement: Canais IPC de autenticação
-O main SHALL registrar `auth:login`, `auth:logout` e `auth:status` pelo utilitário `handle()` da fundação, com `parseArgs`. `auth:login` MUST aceitar exatamente três strings: endereço com até 2048 caracteres e aceito por `parseServiceUrl`, usuário com até 256 e senha com até 1024. `auth:logout` e `auth:status` MUST aceitar exatamente zero argumentos. As mensagens de erro de `parseArgs`, inclusive a `cause`, MUST NOT conter nenhum valor recebido. `EXPOSED_NAMESPACES` SHALL ser `['auth']`.
+O main SHALL registrar `auth:login`, `auth:logout` e `auth:status` pelo utilitário `handle()` (requisito 'Handlers IPC validam o remetente' de `ponte-preload`), com `parseArgs`. `auth:login` MUST aceitar exatamente três strings: endereço com até 2048 caracteres e aceito por `parseServiceUrl`, usuário com até 256 e senha com até 1024. `auth:logout` e `auth:status` MUST aceitar exatamente zero argumentos. As mensagens de erro de `parseArgs`, inclusive a `cause`, MUST NOT conter nenhum valor recebido. `EXPOSED_NAMESPACES` SHALL incluir `'auth'`.
 
 #### Scenario: Tipos e quantidade errados
 - **WHEN** `auth:login` recebe um número no lugar de uma string, dois ou quatro argumentos, ou `auth:status` recebe um argumento

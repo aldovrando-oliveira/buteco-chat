@@ -16,6 +16,13 @@ O texto do bloco de erro SHALL usar a variável `--buteco-color-error-text` (`re
 
 ## MODIFIED Requirements
 
+### Requirement: Esquema de cor segue o sistema
+O app SHALL seguir `prefers-color-scheme` (`defaultColorScheme: 'auto'`), sem seletor manual de tema.
+
+#### Scenario: Sistema em modo escuro
+- **WHEN** o sistema operacional está em modo escuro e o app abre
+- **THEN** a interface usa o esquema escuro
+
 ### Requirement: Fundo da página distinto das superfícies
 O fundo da página SHALL ser `#f6f5f3` no claro e `#121316` no escuro, definido por uma variável própria (`--buteco-color-page`) aplicada ao `body`. A variável `--mantine-color-body`, que o Mantine usa como fundo de `Paper`, `Card`, `Modal` e outros, MUST continuar como superfície: branco no claro e `dark[7]` no escuro.
 
