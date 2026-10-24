@@ -12,21 +12,21 @@ O preload SHALL ser gerado como um único arquivo CommonJS, sem `import` ESM e s
 - **THEN** `window.buteco` existe no renderer e nenhum erro de carregamento do preload aparece no console
 
 ### Requirement: Superfície exposta mínima
-O preload SHALL expor ao renderer apenas o objeto `window.buteco`, via `contextBridge.exposeInMainWorld`. O objeto MUST conter somente as funções já implementadas no main. Nesta change ele é vazio. O preload MUST NOT expor `ipcRenderer`, `require`, `process` ou funções genéricas de envio por canal.
+O preload SHALL expor ao renderer apenas o objeto `window.buteco`, via `contextBridge.exposeInMainWorld`. O objeto MUST conter exatamente os namespaces selecionados por `ExposedApi` (listados em `EXPOSED_NAMESPACES`, em `src/shared/api.ts`), cada um só com funções implementadas no main. O preload MUST NOT expor `ipcRenderer`, `require`, `process` ou funções genéricas de envio por canal.
 
 #### Scenario: Nada além de window.buteco
 - **WHEN** o renderer inspeciona `window`
 - **THEN** existe `window.buteco`, e não existem `window.ipcRenderer`, `window.electron` nem `window.require`
 
-#### Scenario: Objeto vazio nesta change
+#### Scenario: Chaves iguais aos namespaces expostos
 - **WHEN** o renderer lista as chaves de `window.buteco`
-- **THEN** a lista é vazia
+- **THEN** elas são exatamente os namespaces de `ExposedApi`
 
 ### Requirement: Tipos compartilhados do contrato
-O módulo `src/shared/api.ts` SHALL declarar os tipos `ChatError`, `Result<T>`, `ButecoApi`, `AgentSummary` e `TaskState` exatamente como descritos no documento de construção, e um tipo `ExposedApi` que seleciona de `ButecoApi` só os namespaces já expostos. Nesta change, `ExposedApi` não seleciona nenhum. O tipo global de `window.buteco` no renderer MUST ser `ExposedApi`.
+O módulo `src/shared/api.ts` SHALL declarar o contrato inicial entre main e renderer: os tipos `ChatError`, `Result<T>`, `ButecoApi`, `AgentSummary` e `TaskState`, a constante `EXPOSED_NAMESPACES` e o tipo `ExposedApi`, derivado dela, que seleciona de `ButecoApi` só os namespaces já expostos. Uma change MAY alterar esse contrato, desde que registre a alteração e o motivo no próprio `design.md`. O tipo global de `window.buteco` no renderer MUST ser `ExposedApi`.
 
-#### Scenario: Renderer não compila chamada não exposta
-- **WHEN** o código do renderer referencia `window.buteco.auth.login`
+#### Scenario: Renderer não compila namespace não exposto
+- **WHEN** o código do renderer referencia um namespace de `ButecoApi` que não está em `ExposedApi`
 - **THEN** a checagem de tipos (`npm run typecheck`) falha
 
 ### Requirement: Handlers IPC validam o remetente

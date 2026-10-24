@@ -46,5 +46,8 @@ export interface ButecoApi {
   }
 }
 
-/** O que o preload expõe de fato em `window.buteco`. Cada change amplia o `Pick` ao implementar um namespace. */
-export type ExposedApi = Pick<ButecoApi, never>
+/** Namespaces de `ButecoApi` que o preload expõe de fato. Cada change acrescenta o que implementar. */
+export const EXPOSED_NAMESPACES = [] as const satisfies readonly (keyof ButecoApi)[]
+
+/** Tipo de `window.buteco`, derivado de `EXPOSED_NAMESPACES` para os dois nunca divergirem. */
+export type ExposedApi = Pick<ButecoApi, (typeof EXPOSED_NAMESPACES)[number]>
