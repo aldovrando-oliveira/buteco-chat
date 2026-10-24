@@ -28,6 +28,18 @@ O npm avisa que `electron-winstaller` tem um script de instalação ainda não a
 | `npm run test:build` | Verifica os artefatos de `out/`: preload em CommonJS num arquivo só, nenhum asset como `data:`, CSP de produção no `index.html`. Rode depois de `npm run build`. |
 | `npm run package` | Faz o build e empacota o app com o `electron-builder` em `release/`. |
 
+## Entrar na plataforma
+
+O app pede o endereço do serviço Buteco Agentes e o usuário e a senha do operador, os mesmos do painel. Para usar a plataforma local, informe `http://localhost:5017` (ela precisa estar no ar).
+
+- O endereço aceita prefixo de caminho (`https://host/buteco`), mas não credenciais embutidas, query nem `#`.
+- Com `http://` fora do próprio computador (`localhost`, `127.x.x.x`, `[::1]`), a tela avisa que a senha será enviada sem criptografia, mas deixa entrar.
+- A sessão dura o que a plataforma definir (30 min por padrão) e não é renovada: depois disso, é preciso entrar de novo.
+
+Entre aberturas, o app lembra **só o endereço do serviço**, e só depois de um login bem-sucedido. Usuário, senha e token não são guardados em lugar nenhum; o token fica na memória do processo main até sair ou fechar o app.
+
+O app roda uma instância por vez: abrir de novo traz a janela aberta para a frente. O `npm run dev` usa uma pasta de dados própria (`Buteco Chat (dev)`, em `~/Library/Application Support/` no macOS), separada da do app empacotado, então os dois podem ficar abertos juntos e lembram endereços diferentes.
+
 ## Arquitetura
 
 ```

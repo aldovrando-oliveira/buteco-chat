@@ -115,3 +115,25 @@ describe('fundo da página e texto secundário (D10)', () => {
     expect(contrastRatio(dimmed, resolve(`var(${surface})`, scheme))).toBeGreaterThanOrEqual(4.5)
   })
 })
+
+describe('cores de erro e de aviso (login-operador, D12)', () => {
+  it('definem os tons por esquema', () => {
+    expect(resolve('var(--buteco-color-error-text)', 'light')).toBe('#b02a1f')
+    expect(resolve('var(--buteco-color-error-text)', 'dark')).toBe('#f0766a')
+    expect(resolve('var(--buteco-color-warning-text)', 'light')).toBe('#9d6a13')
+    expect(resolve('var(--buteco-color-warning-text)', 'dark')).toBe('#e2a63f')
+  })
+
+  it.each([
+    ['light', '--buteco-color-error-text', '--mantine-color-red-light'],
+    ['dark', '--buteco-color-error-text', '--mantine-color-red-light'],
+    ['light', '--buteco-color-warning-text', '--mantine-color-body'],
+    ['dark', '--buteco-color-warning-text', '--mantine-color-body'],
+    ['light', '--mantine-color-red-text', '--mantine-color-body'],
+    ['dark', '--mantine-color-red-text', '--mantine-color-body']
+  ] as const)('no esquema %s, %s sobre %s tem ≥ 4,5:1', (scheme, text, background) => {
+    const ratio = contrastRatio(resolve(`var(${text})`, scheme), resolve(`var(${background})`, scheme))
+
+    expect(ratio).toBeGreaterThanOrEqual(4.5)
+  })
+})

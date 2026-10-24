@@ -1,4 +1,6 @@
-// Verificação de tipo (roda no `typecheck`, não no Vitest): o renderer não enxerga namespaces ainda não expostos.
+// Verificação de tipo (roda no `typecheck`, não no Vitest): o renderer só enxerga os namespaces expostos.
 
-// @ts-expect-error `auth` ainda não é exposto pelo preload.
-export const notExposed = window.buteco.auth
+export const exposed = window.buteco.auth
+
+// @ts-expect-error `chat` ainda não é exposto pelo preload.
+export const notExposed = window.buteco.chat

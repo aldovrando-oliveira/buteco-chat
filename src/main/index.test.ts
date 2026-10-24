@@ -6,11 +6,14 @@ const appListeners = new Map<string, Listener>()
 vi.mock('electron', () => ({
   app: {
     isPackaged: true,
+    requestSingleInstanceLock: () => true,
+    isReady: () => true,
     on: (name: string, listener: Listener) => appListeners.set(name, listener),
     whenReady: () => new Promise(() => {}) // a janela não é criada neste teste
   },
   BrowserWindow: { getAllWindows: () => [], fromWebContents: () => null },
   ipcMain: { handle: vi.fn() },
+  net: { fetch: vi.fn() },
   nativeTheme: { shouldUseDarkColors: false },
   session: { defaultSession: {} },
   shell: { openExternal: vi.fn() }

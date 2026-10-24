@@ -1,18 +1,10 @@
 import { MantineProvider } from '@mantine/core'
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
-import { App } from './App'
 import { SectionLabel } from './components/SectionLabel'
 import indexHtml from '../index.html?raw'
 
-describe('tela-casca', () => {
-  it('mostra a marca e um botão primário acessível', () => {
-    render(<App />)
-
-    expect(screen.getByRole('heading', { level: 1, name: 'Buteco Chat' })).toBeVisible()
-    expect(screen.getByRole('button', { name: 'Testar notificação' })).toBeEnabled()
-  })
-
+describe('interface em pt-BR', () => {
   it('o index.html declara pt-BR', () => {
     expect(indexHtml).toMatch(/<html lang="pt-BR">/)
   })
