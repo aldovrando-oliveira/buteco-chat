@@ -167,7 +167,14 @@ O protótipo usa três ícones de traço (balão de conversa, servidor, saída).
 ### D14. Botão Sair só de ícone
 No protótipo, o **Sair** do rodapé é só ícone (saída), sem texto visível. Implementado como `ActionIcon` com o ícone de saída e `aria-label="Sair"`. Os testes o encontram pelo nome acessível.
 
-### D15. Layout do código
+### D15. Instância única e pasta de dados própria do dev
+Achado da fumaça no pacote (6.3): o endereço não foi lembrado depois de fechar e reabrir. A causa, reproduzida num teste descartável no Electron 45: o dev estava aberto ao mesmo tempo, e dev e pacote usam a mesma pasta de dados (`~/Library/Application Support/Buteco Chat`, derivada do `productName`). Com outra instância segurando a pasta, o `localStorage` da segunda fica só em memória e se perde ao fechar, sem nenhum erro. Sem outra instância, o `localStorage` de `file://` persiste mesmo fechando logo após a gravação. O mesmo vale para duas instâncias do pacote.
+- **Pasta de dados do dev**: com `!app.isPackaged`, o main chama `app.setPath('userData', <pasta padrão> + ' (dev)')` antes do `ready` e antes do bloqueio de instância. Dev e pacote nunca disputam nem misturam dados.
+- **Instância única**: `app.requestSingleInstanceLock()` logo no início. Se o bloqueio falhar, o processo chama `app.quit()` e não registra mais nada (nem janela, nem canais IPC). Na instância principal, `second-instance` restaura (se minimizada) e foca a janela existente, ou abre uma se não houver (macOS com o app aberto sem janela).
+- O bloqueio é por pasta de dados, então dev e pacote podem ficar abertos ao mesmo tempo, cada um com a sua.
+- **Alternativa descartada**: só registrar o risco no README. A falha é silenciosa e atinge o único dado que o app lembra.
+
+### D16. Layout do código
 ```
 src/shared/service-url.ts            parseServiceUrl (+ teste no projeto main)
 src/shared/api.ts                    D9
@@ -186,7 +193,8 @@ src/renderer/src/auth/LoginScreen.tsx, SessionScreen.tsx, Brand.tsx, saved-servi
 - [Mensagem de redirecionamento do Electron mudar numa atualização] → A segurança vem de `redirect: 'manual'`. O pior caso é o redirecionamento ser mostrado como "não foi possível conectar". O classificador também aceita as formas da especificação Fetch (D2).
 - [Relógio local diferente do servidor] → Adiantado: a sessão acaba antes no cliente e o usuário entra de novo. Atrasado: o token pode já estar vencido no servidor; o 401 em uso é tratado na `sessao-expirada`. Com o relógio adiantado em mais que o tempo de vida do token, um `expiresAt` válido parece vencido na chegada e o login vira `bad-response` ("deu uma resposta inesperada"); esse é um dos caminhos para essa mensagem. Sem correção pelo cabeçalho `Date` nem tratamento específico nesta change.
 - [Strings em JavaScript não podem ser zeradas] → "Não guardar a senha" significa não manter referência depois da chamada. O valor pode ficar na memória até a coleta de lixo. Aceito.
-- [`localStorage` do dev (`localhost:5173`) e do app empacotado (`file://`) são separados] → A fumaça do endereço lembrado é feita no app empacotado.
+- [`localStorage` do dev (`localhost:5173`) e do app empacotado (`file://`) são separados] → A fumaça do endereço lembrado é feita no app empacotado. Desde D15, dev e pacote também usam pastas de dados diferentes.
+- [Outra instância com a mesma pasta de dados torna o `localStorage` volátil, sem erro] → D15: instância única e pasta própria do dev.
 - [Aviso de HTTP fora de loopback não impede o envio da senha em claro] → Decisão consciente: ferramenta interna, testes em rede local são esperados.
 - [Erro de certificado aparece como "não foi possível conectar"] → A `message` de `unreachable` guarda o `net::ERR_CERT_…`, disponível para uma mensagem específica no futuro. Por ora, a mensagem do protótipo.
 

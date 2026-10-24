@@ -234,6 +234,25 @@ O renderer SHALL gravar o `baseUrl` normalizado em `localStorage['buteco-chat:se
 - **WHEN** `localStorage.getItem` e `setItem` lançam erro
 - **THEN** a tela de primeiro acesso aparece, o login funciona e nenhum erro escapa
 
+### Requirement: Uma instância do app por pasta de dados
+O main SHALL pedir o bloqueio de instância única (`app.requestSingleInstanceLock()`) antes de criar janelas ou registrar canais. Se o bloqueio for negado, o processo MUST encerrar sem criar janela nem registrar canais. Na instância principal, a abertura de uma segunda instância MUST trazer a janela existente para a frente (restaurando-a se minimizada) ou abrir uma janela se não houver nenhuma. Fora do app empacotado, o main MUST usar uma pasta de dados própria (a pasta padrão com o sufixo ` (dev)`), definida antes do bloqueio, para o dev nunca disputar a pasta do pacote.
+
+#### Scenario: Segunda instância
+- **WHEN** o app já está aberto e uma segunda instância é iniciada com a mesma pasta de dados
+- **THEN** a segunda instância encerra sem criar janela nem registrar canais, e a janela da primeira é focada
+
+#### Scenario: Instância principal sem janela
+- **WHEN** a instância principal está aberta sem janela (macOS) e uma segunda instância é iniciada
+- **THEN** a instância principal abre uma janela
+
+#### Scenario: Pasta de dados do dev
+- **WHEN** o app roda fora do pacote
+- **THEN** a pasta de dados é a padrão com o sufixo ` (dev)`; no app empacotado, a pasta padrão não muda
+
+#### Scenario: Endereço lembrado com o dev aberto
+- **WHEN** o dev está aberto e o app empacotado faz login, é fechado e reaberto
+- **THEN** a linha "Serviço" mostra o endereço do login
+
 ### Requirement: Tela inicial decidida pelo main
 Ao montar, o renderer SHALL chamar `auth.status()` e mostrar o destino pós-login se autenticado, ou a tela de login se não. Até a resposta, MUST aparecer só o fundo da página.
 

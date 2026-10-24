@@ -11,6 +11,7 @@ A fundação entregou um app endurecido, mas sem nenhuma integração com a plat
 - **IPC**: canais `auth:login`, `auth:logout` e `auth:status` registrados com `handle()` e `parseArgs` (tipos, quantidade, limites de tamanho e endereço válido). `EXPOSED_NAMESPACES` passa a `['auth']`. O token nunca cruza a ponte.
 - **Mudanças de contrato em `src/shared/api.ts`** (registradas no design): `ChatError` ganha `{ kind: 'bad-response' }`; `auth.status()` ganha `username: string | null`.
 - **Renderer**: a casca sai. Entram a tela de login de primeiro acesso (campo de endereço), a de acessos seguintes (linha "Serviço" com **Alterar**) e o destino pós-login provisório ("operador @ host", tempo restante, **Sair**), seguindo o protótipo aprovado. Navegação por estado (`checking` → `login` → `session`), com o estado inicial vindo de `status()`. Só o endereço é lembrado (`localStorage` `buteco-chat:service-url`, gravado após login bem-sucedido).
+- **Instância única e pasta de dados própria do dev** (achado da fumaça, design D15): com outra instância segurando a pasta de dados, o `localStorage` fica volátil e o endereço não é lembrado.
 - **Dependência nova**: `@tabler/icons-react`, para os ícones do protótipo (balão, servidor, saída).
 
 ## Capabilities
