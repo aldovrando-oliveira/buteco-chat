@@ -40,6 +40,24 @@ Entre aberturas, o app lembra **só o endereço do serviço**, e só depois de u
 
 O app roda uma instância por vez: abrir de novo traz a janela aberta para a frente. O `npm run dev` usa uma pasta de dados própria (`Buteco Chat (dev)`, em `~/Library/Application Support/` no macOS), separada da do app empacotado, então os dois podem ficar abertos juntos e lembram endereços diferentes.
 
+## Conversar com um agente
+
+Depois do login, a tela de conversas lista os agentes da plataforma no seletor da barra lateral. Os inativos aparecem desabilitados. Escolha um agente e escreva no campo de baixo: Enter envia e Shift+Enter quebra a linha. Uma mensagem tem até 16.000 caracteres.
+
+- **Uma resposta por vez.** O app consulta a task a cada segundo até ela terminar. Enquanto espera, o envio fica bloqueado: a plataforma processa uma mensagem por vez em cada conversa.
+- **Contexto.** A partir da segunda mensagem, o app reenvia o `contextId`, e o agente recebe o histórico da conversa guardado na plataforma. O `contextId` aparece abreviado no cabeçalho, e **Copiar** copia o valor completo.
+- **Falhas.**
+  - Se o agente não conseguir responder, **Reenviar** manda a mesma mensagem de novo, na mesma conversa.
+  - Se a resposta não chegar em 90 s, dá para continuar aguardando ou reenviar. Reenviar antes confere se a resposta original já chegou.
+  - Um agente inativo ou sem modelo configurado recusa a mensagem. Nesse caso não há reenvio: escolha outro agente.
+- **Respostas** são mostradas em Markdown, sem HTML. Links abrem no navegador padrão. Imagens aparecem como link, porque o app não carrega imagens da internet.
+- **Nova conversa** e a troca de agente começam uma conversa nova, sem `contextId`. Se a atual tiver mensagens, o app pede confirmação.
+
+**O que não é guardado:**
+- A conversa existe só na memória do app. Ela se perde ao começar outra, ao sair, ao fechar o app ou quando a sessão termina.
+- Se a plataforma recusar o token durante o uso, o app volta ao login com o aviso "A sessão terminou. Entre de novo para continuar.", sem retomar a resposta pendente.
+- O histórico local de conversas e a retomada depois de um novo login ainda não existem.
+
 ## Arquitetura
 
 ```

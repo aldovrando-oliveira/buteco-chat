@@ -1,7 +1,11 @@
+import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
-import { app, BrowserWindow, net, session, shell } from 'electron'
+import { app, BrowserWindow, clipboard, net, session, shell } from 'electron'
 import { registerAuthHandlers } from './auth/ipc'
 import { createAuthService } from './auth/service'
+import { createChatClient } from './chat/client'
+import { registerChatHandlers } from './chat/ipc'
+import { registerClipboardHandlers } from './clipboard/ipc'
 import { devUserDataPath, focusOrOpen } from './instance'
 import { rendererLocation, setTrustedRenderer } from './ipc/handle'
 import { devServerOrigin, resolveRuntime } from './runtime'
@@ -43,14 +47,23 @@ function startPrimaryInstance(): void {
     denyAllPermissions(session.defaultSession)
     // net.fetch só funciona depois do ready (design D1 da login-operador). Pilha do Chromium: proxy e certificados
     // do sistema.
-    registerAuthHandlers(
-      createAuthService({
+    const auth = createAuthService({
+      fetch: (url, init) => net.fetch(url, init),
+      now: () => Date.now(),
+      setTimeout: (callback, ms) => setTimeout(callback, ms),
+      clearTimeout: (handle) => clearTimeout(handle)
+    })
+    registerAuthHandlers(auth)
+    registerChatHandlers(
+      createChatClient({
         fetch: (url, init) => net.fetch(url, init),
-        now: () => Date.now(),
+        auth,
         setTimeout: (callback, ms) => setTimeout(callback, ms),
-        clearTimeout: (handle) => clearTimeout(handle)
+        clearTimeout: (handle) => clearTimeout(handle),
+        randomUUID: () => randomUUID()
       })
     )
+    registerClipboardHandlers(clipboard)
     openMainWindow()
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) openMainWindow()

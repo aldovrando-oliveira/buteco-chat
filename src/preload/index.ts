@@ -8,6 +8,16 @@ const api: ExposedApi = {
     login: (serviceUrl, username, password) => ipcRenderer.invoke(IpcChannels.authLogin, serviceUrl, username, password),
     logout: () => ipcRenderer.invoke(IpcChannels.authLogout),
     status: () => ipcRenderer.invoke(IpcChannels.authStatus)
+  },
+  agents: {
+    list: () => ipcRenderer.invoke(IpcChannels.agentsList)
+  },
+  chat: {
+    send: (agentId, text, contextId) => ipcRenderer.invoke(IpcChannels.chatSend, agentId, text, contextId),
+    getTask: (agentId, taskId) => ipcRenderer.invoke(IpcChannels.chatGetTask, agentId, taskId)
+  },
+  clipboard: {
+    writeText: (text) => ipcRenderer.invoke(IpcChannels.clipboardWriteText, text)
   }
 }
 

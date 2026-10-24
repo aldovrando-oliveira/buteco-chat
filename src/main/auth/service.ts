@@ -1,8 +1,8 @@
 import type { ChatError, Result } from '../../shared/api'
 import { parseServiceUrl } from '../../shared/service-url'
+import { classifyRejection, ISO_DATE_TIME, isOpaqueRedirect, type FetchLike } from '../http/classify'
 
-/** Forma mínima de `fetch` usada aqui. Em produção, `net.fetch` do Electron (design D1). */
-export type FetchLike = (url: string, init: RequestInit) => Promise<Response>
+export type { FetchLike }
 
 export interface AuthServiceDeps<TimerHandle = unknown> {
   fetch: FetchLike
@@ -30,8 +30,6 @@ export interface AuthService {
 export const LOGIN_TIMEOUT_MS = 15_000
 const MAX_BODY_LENGTH = 64 * 1024
 const MAX_TOKEN_LENGTH = 8192
-// Fração de 0 a 7 casas: o .NET serializa DateTimeOffset com sete (D5). Fuso obrigatório.
-const ISO_DATE_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,7})?(Z|[+-]\d{2}:\d{2})$/
 
 /** Sem campo de senha por construção: a senha só existe nos parâmetros de `login` e no corpo da requisição. */
 interface Session {
@@ -139,22 +137,11 @@ export function createAuthService<TimerHandle>(deps: AuthServiceDeps<TimerHandle
 
 /** Mapeamento de D4. Redirecionamento pela resposta: opaca/status 0 (especificação Fetch) ou 3xx. */
 async function classifyResponse(response: Response, now: number): Promise<Outcome> {
-  if (response.type === 'opaqueredirect' || response.status === 0) return { ok: false, error: { kind: 'http', status: 0 } }
+  if (isOpaqueRedirect(response)) return { ok: false, error: { kind: 'http', status: 0 } }
   if (response.status === 401) return { ok: false, error: { kind: 'invalid-credentials' } }
   if (response.status !== 200) return { ok: false, error: { kind: 'http', status: response.status } }
   const body = await response.text()
   return parseLoginBody(body, now)
-}
-
-/**
- * Rejeições do `fetch` (D2, D4). No Electron 45 o `redirect: 'manual'` rejeita com "Redirect was cancelled";
- * erros de rede vêm como `net::ERR_…`. Os erros só têm `message`, sem `code`.
- */
-function classifyRejection(error: unknown): ChatError {
-  const message = error instanceof Error ? error.message : ''
-  if (message.startsWith('net::')) return { kind: 'unreachable', message }
-  if (/redirect/i.test(message)) return { kind: 'http', status: 0 }
-  return { kind: 'unreachable', message: 'network' }
 }
 
 /** Critérios de `bad-response` (D5). */

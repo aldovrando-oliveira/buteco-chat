@@ -31,3 +31,4 @@ context: |
   - Autenticação isolada em src/main/auth (provisória: login do operador).
   - Preload expõe só o que está implementado; IPC valida o remetente.
   - Uma change por vez, com revisão rigorosa antes de /opsx:apply.
+  - Um commit por change, feito depois do arquivamento; nada é commitado durante a change.

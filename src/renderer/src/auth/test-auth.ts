@@ -17,6 +17,15 @@ export function mockAuth() {
     logout: vi.fn<Auth['logout']>(async () => {}),
     status: vi.fn<Auth['status']>(async () => LOGGED_OUT)
   }
-  window.buteco = { auth } satisfies ExposedApi
+  // Os outros namespaces respondem o mínimo; a tela de conversas tem o seu simulado completo em test-chat.ts.
+  window.buteco = {
+    auth,
+    agents: { list: vi.fn(async () => ({ ok: true as const, value: [] })) },
+    chat: {
+      send: vi.fn(async () => ({ ok: false as const, error: { kind: 'unreachable' as const, message: 'network' } })),
+      getTask: vi.fn(async () => ({ ok: false as const, error: { kind: 'unreachable' as const, message: 'network' } }))
+    },
+    clipboard: { writeText: vi.fn(async () => {}) }
+  } satisfies ExposedApi
   return auth
 }

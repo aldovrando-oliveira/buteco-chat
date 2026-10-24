@@ -137,3 +137,21 @@ describe('cores de erro e de aviso (login-operador, D12)', () => {
     expect(ratio).toBeGreaterThanOrEqual(4.5)
   })
 })
+
+describe('selo Ativo e balão do usuário (conversa-a2a, D19)', () => {
+  it('define o texto de sucesso por esquema', () => {
+    expect(resolve('var(--buteco-color-success-text)', 'light')).toBe('#1a7a49')
+    expect(resolve('var(--buteco-color-success-text)', 'dark')).toBe('#4cc38a')
+  })
+
+  it.each([
+    ['light', '--buteco-color-success-text', '--mantine-color-green-light'],
+    ['dark', '--buteco-color-success-text', '--mantine-color-green-light'],
+    ['light', '--mantine-color-text', '--mantine-color-butecoBlue-light'],
+    ['dark', '--mantine-color-text', '--mantine-color-butecoBlue-light']
+  ] as const)('no esquema %s, %s sobre %s tem ≥ 4,5:1', (scheme, text, background) => {
+    const ratio = contrastRatio(resolve(`var(${text})`, scheme), resolve(`var(${background})`, scheme))
+
+    expect(ratio).toBeGreaterThanOrEqual(4.5)
+  })
+})

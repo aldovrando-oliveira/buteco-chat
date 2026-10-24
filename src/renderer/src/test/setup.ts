@@ -25,3 +25,6 @@ class ResizeObserverStub {
   disconnect() {}
 }
 window.ResizeObserver = ResizeObserverStub
+
+// jsdom também não implementa scrollIntoView, que o Combobox do Mantine (Select) chama ao abrir a lista.
+Element.prototype.scrollIntoView = () => {}

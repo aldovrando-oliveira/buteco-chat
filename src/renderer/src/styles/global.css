@@ -13,3 +13,114 @@ html {
 body {
   background-color: var(--buteco-color-page);
 }
+
+/*
+ * Tela de conversas (conversa-a2a, D20). Largura da barra lateral, direção da raiz e área reservada ficam em classes,
+ * e não em props de estilo do Mantine: a media query não sobrescreveria estilo inline.
+ */
+.buteco-conversation {
+  display: flex;
+  flex-direction: row;
+  height: 100vh;
+}
+
+.buteco-sidebar {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  width: 288px;
+  background-color: var(--mantine-color-body);
+  border-right: 1px solid var(--mantine-color-default-border);
+}
+
+.buteco-sidebar-history {
+  flex: 1;
+}
+
+.buteco-main {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+@media (max-width: 859.98px) {
+  .buteco-conversation {
+    flex-direction: column;
+  }
+
+  .buteco-sidebar {
+    width: 100%;
+    border-right: none;
+    border-bottom: 1px solid var(--mantine-color-default-border);
+  }
+
+  .buteco-sidebar-history {
+    display: none;
+  }
+}
+
+/* Pontos do pendente. */
+@keyframes buteco-pulse {
+  0%,
+  80%,
+  100% {
+    opacity: 0.25;
+  }
+  40% {
+    opacity: 1;
+  }
+}
+
+.buteco-dot {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background-color: var(--mantine-color-dimmed);
+  animation: buteco-pulse 1.2s infinite ease-in-out;
+}
+
+.buteco-dot:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.buteco-dot:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .buteco-dot {
+    animation: none;
+    opacity: 0.6;
+  }
+}
+
+/* Markdown das respostas (D15): espaçamento entre blocos, sem margem nas pontas. */
+.buteco-markdown > :first-child {
+  margin-top: 0;
+}
+
+.buteco-markdown > :last-child {
+  margin-bottom: 0;
+}
+
+.buteco-markdown p,
+.buteco-markdown ul,
+.buteco-markdown ol,
+.buteco-markdown pre,
+.buteco-markdown blockquote {
+  margin: 0 0 8px;
+}
+
+.buteco-markdown ul,
+.buteco-markdown ol {
+  padding-left: 20px;
+}
+
+.buteco-markdown blockquote {
+  padding-left: 10px;
+  border-left: 3px solid var(--mantine-color-default-border);
+  color: var(--mantine-color-dimmed);
+}

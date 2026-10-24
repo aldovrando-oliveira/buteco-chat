@@ -306,26 +306,29 @@ describe('endereço lembrado', () => {
   })
 })
 
-describe('tela inicial e destino pós-login', () => {
-  it('recarregar com sessão ativa vai direto ao destino', async () => {
+// O rodapé de sessão (usuário, host, minutos, Sair, tempo esgotado) é testado em conversation/conversation.test.tsx.
+describe('tela inicial', () => {
+  it('recarregar com sessão ativa vai direto à tela de conversas', async () => {
     auth.status.mockResolvedValue(loggedIn())
     render(<App />)
 
-    expect(await screen.findByRole('button', { name: 'Sair' })).toBeVisible()
+    expect(await screen.findByText('AGENTE')).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Nova conversa' })).toBeVisible()
     expect(screen.queryByRole('heading', { name: 'Entrar' })).toBeNull()
   })
 
-  it('mostra usuário, host e minutos restantes', async () => {
-    auth.status.mockResolvedValue(loggedIn(30, 'http://localhost:5017', 'ana'))
-    render(<App />)
-    await screen.findByRole('button', { name: 'Sair' })
+  it('login bem-sucedido leva à tela de conversas', async () => {
+    auth.status.mockResolvedValueOnce(LOGGED_OUT).mockResolvedValue(loggedIn())
+    await renderLogin()
+    fill('http://localhost:5017')
 
-    expect(screen.getByText('ana')).toBeVisible()
-    expect(screen.getByText('@ localhost:5017')).toBeVisible()
-    expect(screen.getByText('Sessão válida por mais 30 min')).toBeVisible()
+    fireEvent.click(submitButton())
+
+    expect(await screen.findByText('AGENTE')).toBeVisible()
+    expect(screen.queryByRole('heading', { name: 'Entrar' })).toBeNull()
   })
 
-  it('Sair chama logout e volta aos acessos seguintes, com campos vazios', async () => {
+  it('Sair volta aos acessos seguintes, com campos vazios', async () => {
     localStorage.setItem(SERVICE_URL_KEY, 'http://localhost:5017')
     auth.status.mockResolvedValue(loggedIn())
     render(<App />)
@@ -337,17 +340,6 @@ describe('tela inicial e destino pós-login', () => {
     expect(screen.getByRole('button', { name: 'Alterar' })).toBeVisible()
     expect(usernameField()).toHaveValue('')
     expect(passwordField()).toHaveValue('')
-  })
-
-  it('tempo esgotado: consulta o main e volta ao login', async () => {
-    auth.status
-      .mockResolvedValueOnce({ ...loggedIn(), expiresAt: new Date(Date.now() + 50).toISOString() })
-      .mockResolvedValue(LOGGED_OUT)
-    render(<App />)
-    await screen.findByRole('button', { name: 'Sair' })
-
-    expect(await screen.findByRole('heading', { name: 'Entrar' })).toBeVisible()
-    expect(auth.status).toHaveBeenCalledTimes(2)
   })
 })
 

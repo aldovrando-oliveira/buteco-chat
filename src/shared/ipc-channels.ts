@@ -5,7 +5,11 @@
 export const IpcChannels = {
   authLogin: 'auth:login',
   authLogout: 'auth:logout',
-  authStatus: 'auth:status'
+  authStatus: 'auth:status',
+  agentsList: 'agents:list',
+  chatSend: 'chat:send',
+  chatGetTask: 'chat:getTask',
+  clipboardWriteText: 'clipboard:writeText'
 } as const
 
 export type IpcChannel = (typeof IpcChannels)[keyof typeof IpcChannels]

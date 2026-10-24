@@ -8,18 +8,21 @@ import { PAGE_BACKGROUND } from '../../../shared/page-background'
  *   não recebe o esquema de cor, por isso a troca é feita aqui, na variável que ele referencia.
  * - Texto do bloco de erro e do aviso (login-operador, D12): nenhuma variável padrão do Mantine é vermelha/amarela
  *   e tem 4,5:1 nos dois esquemas (`red-light-color` é quase branco no escuro; `yellow-text` dá 3,7:1 no claro).
+ * - Texto do selo **Ativo** (conversa-a2a, D19): `green-light-color` é `green[0]`, quase branco, no escuro.
  */
 export const cssVariablesResolver: CSSVariablesResolver = (theme) => ({
   variables: {},
   light: {
     '--buteco-color-page': PAGE_BACKGROUND.light,
     '--buteco-color-error-text': 'var(--mantine-color-red-9)',
-    '--buteco-color-warning-text': 'var(--mantine-color-yellow-7)'
+    '--buteco-color-warning-text': 'var(--mantine-color-yellow-7)',
+    '--buteco-color-success-text': 'var(--mantine-color-green-9)'
   },
   dark: {
     '--buteco-color-page': PAGE_BACKGROUND.dark,
     '--buteco-color-error-text': 'var(--mantine-color-red-4)',
     '--buteco-color-warning-text': 'var(--mantine-color-yellow-4)',
+    '--buteco-color-success-text': 'var(--mantine-color-green-4)',
     [`--mantine-color-${theme.primaryColor}-filled`]: `var(--mantine-color-${theme.primaryColor}-6)`,
     [`--mantine-color-${theme.primaryColor}-filled-hover`]: `var(--mantine-color-${theme.primaryColor}-7)`
   }

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Autenticar o operador na plataforma Buteco Agentes: validar e normalizar o endereço do serviço, obter o token pelo login e mantê-lo só na memória do main, mapear os erros para `ChatError`, expor os canais IPC `auth:*` sem o token, garantir uma instância do app por pasta de dados e oferecer as telas de login e o destino pós-login provisório.
+Autenticar o operador na plataforma Buteco Agentes: validar e normalizar o endereço do serviço, obter o token pelo login e mantê-lo só na memória do main, mapear os erros para `ChatError`, expor os canais IPC `auth:*` sem o token, garantir uma instância do app por pasta de dados e oferecer as telas de login.
 
 ## Requirements
 
@@ -98,18 +98,29 @@ Cada `login` e cada `logout` SHALL abortar a chamada de login em andamento. A re
 - **THEN** `status()` devolve `authenticated: false` com os demais campos `null`, e `getToken()` devolve `null`
 
 ### Requirement: Token nunca cruza a ponte
-`getToken()` SHALL existir só no main, para as chamadas autenticadas feitas pelo main, e MUST NOT ter canal IPC. Nenhum valor devolvido ao renderer (resultado de `login`, de `status` ou mensagem de erro) MUST conter o token.
+`getToken()` SHALL existir só no main, para as chamadas autenticadas feitas pelo main, e MUST NOT ter canal IPC. Nenhum valor devolvido ao renderer MUST conter o token: nem o resultado de `login`, `status`, `agents.list`, `chat.send`, `chat.getTask` ou `clipboard.writeText`, nem mensagem de erro.
 
 #### Scenario: Resultado do login sem token
 - **WHEN** um login bem-sucedido devolve o resultado pelo canal `auth:login`
 - **THEN** o valor serializado não contém a string do token
+
+#### Scenario: Resultados da conversa sem token
+- **WHEN** `agents:list`, `chat:send` e `chat:getTask` devolvem sucesso, `unauthorized`, `rpc` e `bad-response`
+- **THEN** nenhum valor serializado contém a string do token
 
 #### Scenario: Preload sem acesso ao token
 - **WHEN** o renderer lista as funções de `window.buteco.auth`
 - **THEN** elas são exatamente `login`, `logout` e `status`
 
 ### Requirement: Canais IPC de autenticação
-O main SHALL registrar `auth:login`, `auth:logout` e `auth:status` pelo utilitário `handle()` (requisito 'Handlers IPC validam o remetente' de `ponte-preload`), com `parseArgs`. `auth:login` MUST aceitar exatamente três strings: endereço com até 2048 caracteres e aceito por `parseServiceUrl`, usuário com até 256 e senha com até 1024. `auth:logout` e `auth:status` MUST aceitar exatamente zero argumentos. As mensagens de erro de `parseArgs`, inclusive a `cause`, MUST NOT conter nenhum valor recebido. `EXPOSED_NAMESPACES` SHALL incluir `'auth'`.
+O main SHALL registrar `auth:login`, `auth:logout` e `auth:status` pelo utilitário `handle()` (requisito 'Handlers IPC validam o remetente' de `ponte-preload`), com `parseArgs`.
+- `auth:login` MUST aceitar exatamente três strings:
+  - endereço com até 2048 caracteres e aceito por `parseServiceUrl`;
+  - usuário com até 256 caracteres;
+  - senha com até 1024 caracteres.
+- `auth:logout` e `auth:status` MUST aceitar exatamente zero argumentos.
+
+As mensagens de erro de `parseArgs`, inclusive a `cause`, MUST NOT conter nenhum valor recebido. `EXPOSED_NAMESPACES` SHALL incluir `'auth'`.
 
 #### Scenario: Tipos e quantidade errados
 - **WHEN** `auth:login` recebe um número no lugar de uma string, dois ou quatro argumentos, ou `auth:status` recebe um argumento
@@ -125,7 +136,7 @@ O main SHALL registrar `auth:login`, `auth:logout` e `auth:status` pelo utilitá
 
 #### Scenario: Tipagem do renderer
 - **WHEN** o `typecheck` roda
-- **THEN** `window.buteco.auth` compila no renderer e `window.buteco.chat` não
+- **THEN** `window.buteco.auth` compila no renderer com `login`, `logout` e `status`, e `window.buteco.auth.getToken` não compila
 
 ### Requirement: Estrutura das telas de login
 As duas telas de login SHALL ter o fundo da página (`--buteco-color-page`), conteúdo centralizado nos dois eixos, coluna de largura máxima de 380 px e 20 px entre os blocos. No topo, centralizada, MUST estar a marca: ícone de balão de conversa de traço, 24 px, na cor primária, seguido de "Buteco" (16 px, peso 600) e "Chat" (16 px, cor secundária). Abaixo, um cartão (superfície, borda, raio 11 px, padding 24 px, 14 px entre os itens) MUST conter, nesta ordem: o título "Entrar" (20 px, peso 600) com o subtítulo "Use o mesmo usuário e senha do painel Buteco Agentes." em cor secundária; o bloco de erro, só quando houver erro; o endereço do serviço; o campo "Usuário" (`autocomplete="username"`); o campo "Senha" (`type="password"`, `autocomplete="current-password"`); e o botão primário preenchido "Entrar", de largura total e 36 px de altura. Rótulos MUST ter peso 500; campos, 34 px de altura e raio 7 px. A tela MUST NOT ter texto de ajuda permanente: nada abaixo do endereço além da mensagem de validação e do aviso de HTTP, e nada abaixo do cartão. As telas MUST funcionar nos esquemas claro e escuro.
@@ -260,23 +271,12 @@ O main SHALL pedir o bloqueio de instância única (`app.requestSingleInstanceLo
 - **THEN** a linha "Serviço" mostra o endereço do login
 
 ### Requirement: Tela inicial decidida pelo main
-Ao montar, o renderer SHALL chamar `auth.status()` e mostrar o destino pós-login se autenticado, ou a tela de login se não. Até a resposta, MUST aparecer só o fundo da página.
+Ao montar, o renderer SHALL chamar `auth.status()` e mostrar a tela de conversas (capacidade `conversa`) se autenticado, ou a tela de login se não. Até a resposta, MUST aparecer só o fundo da página.
 
 #### Scenario: Recarregar com sessão ativa
 - **WHEN** o renderer é recarregado e `status()` devolve `authenticated: true`
-- **THEN** o destino pós-login aparece, sem passar pela tela de login
+- **THEN** a tela de conversas aparece, sem passar pela tela de login
 
-### Requirement: Destino pós-login provisório
-Depois do login, o renderer SHALL mostrar, sobre o fundo da página, "{usuário} @ {host}" no formato do rodapé da barra lateral do protótipo de conversas (usuário em peso 500; "@ {host}" em mono 11 px, cor secundária), o texto "Sessão válida por mais {n} min" (11 px, cor secundária, `n` arredondado para cima a partir de `expiresAt`) e o botão **Sair** com ícone de saída e `aria-label="Sair"`. **Sair** MUST chamar `logout()` e voltar à tela de login, com usuário e senha vazios. Quando o tempo restante chega a zero, o renderer MUST chamar `status()` e voltar à tela de login se não estiver autenticado. Esta tela é provisória e será substituída pela tela de conversas.
-
-#### Scenario: Identificação e tempo restante
-- **WHEN** o login de `ana` em `http://localhost:5017` dá certo, com `expiresAt` 30 min à frente
-- **THEN** aparecem "ana", "@ localhost:5017" e "Sessão válida por mais 30 min"
-
-#### Scenario: Sair
-- **WHEN** o usuário clica no botão de nome acessível "Sair"
-- **THEN** `logout()` é chamado e a tela de acessos seguintes aparece, com usuário e senha vazios
-
-#### Scenario: Tempo esgotado
-- **WHEN** o tempo restante chega a zero e `status()` devolve `authenticated: false`
-- **THEN** a tela de login aparece
+#### Scenario: Login bem-sucedido
+- **WHEN** o login dá certo
+- **THEN** a tela de conversas aparece
