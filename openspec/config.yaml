@@ -18,3 +18,16 @@ schema: spec-driven
 #       - Always include a "Non-goals" section
 #     tasks:
 #       - Break tasks into chunks of max 2 hours
+
+context: |
+  Buteco Chat: cliente desktop (Electron + React 19 + TypeScript + Mantine v9)
+  para conversar com agentes da plataforma Buteco Agentes via contrato HTTP
+  público (POST /auth/login, GET /agents, JSON-RPC A2A em /agents/{id}/a2a).
+  Cliente externo: não importa código da plataforma.
+  Idioma da interface e dos artefatos: pt-BR.
+  Regras invariáveis:
+  - Todo HTTP sai do processo main; o renderer tem CSP connect-src 'none'.
+  - Token só na memória do main; senha nunca persistida.
+  - Autenticação isolada em src/main/auth (provisória: login do operador).
+  - Preload expõe só o que está implementado; IPC valida o remetente.
+  - Uma change por vez, com revisão rigorosa antes de /opsx:apply.
