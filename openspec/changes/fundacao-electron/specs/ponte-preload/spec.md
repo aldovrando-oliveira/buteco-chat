@@ -30,7 +30,15 @@ O módulo `src/shared/api.ts` SHALL declarar os tipos `ChatError`, `Result<T>`, 
 - **THEN** a checagem de tipos (`npm run typecheck`) falha
 
 ### Requirement: Handlers IPC validam o remetente
-O main SHALL registrar handlers IPC somente por um utilitário que valida o remetente antes de executar o handler: `event.senderFrame` MUST existir, MUST ser o frame principal (`parent === null`) de um `webContents` de janela do app, e a URL do frame MUST pertencer ao renderer do app. Em produção, esquema (`file:`) e caminho MUST ser iguais aos do `index.html` empacotado. Em dev, a origem (esquema, host e porta) MUST ser igual à do servidor de dev. Em ambos os casos, `hash` e `search` MUST ser ignorados. Remetentes inválidos MUST receber uma rejeição, sem executar o handler.
+O main SHALL registrar handlers IPC somente por um utilitário que valida o remetente antes de executar o handler: `event.senderFrame` MUST existir, MUST ser o frame principal (`parent === null`) de um `webContents` de janela do app, e a URL do frame MUST pertencer ao renderer do app. Em produção, esquema (`file:`) e caminho MUST ser iguais aos do `index.html` empacotado. Em dev, a origem (esquema, host e porta) MUST ser igual à do servidor de dev. Em ambos os casos, `hash` e `search` MUST ser ignorados. Remetentes inválidos MUST receber uma rejeição, sem executar o handler. Todo canal MUST declarar a validação dos seus argumentos: o utilitário recebe uma função `parseArgs(args: unknown[])`, executada depois da validação do remetente e antes do handler. Se `parseArgs` lançar erro, a chamada MUST ser rejeitada sem executar o handler.
+
+#### Scenario: Argumentos validados antes do handler
+- **WHEN** um remetente legítimo chama um canal registrado com `handle(channel, parseArgs, fn)`, com argumentos no formato que `parseArgs` aceita
+- **THEN** `fn` recebe os argumentos devolvidos por `parseArgs`
+
+#### Scenario: Argumentos em formato inválido
+- **WHEN** um remetente legítimo chama o canal com argumentos que `parseArgs` rejeita (tipo errado, faltando ou sobrando)
+- **THEN** a chamada é rejeitada e o handler não é executado
 
 #### Scenario: Remetente legítimo
 - **WHEN** um handler registrado pelo utilitário recebe uma chamada do frame principal da janela, com a URL do renderer do app
