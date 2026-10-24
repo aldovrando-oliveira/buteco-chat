@@ -1,27 +1,34 @@
-import { Box, Button, Group, Modal, Stack, Text } from '@mantine/core'
+import { Box, Stack, Text } from '@mantine/core'
 import { useState } from 'react'
-import type { AgentSummary } from '../../../shared/api'
+import { DeleteConversationModal } from '../history/DeleteConversationModal'
 import { StateBlock } from './blocks/StateBlock'
 import { Composer } from './Composer'
 import { ConversationHeader } from './ConversationHeader'
 import { CenteredCard, EmptyConversation } from './EmptyConversation'
+import type { Conversation } from './model'
 import { ReloginModal } from './ReloginModal'
 import { SessionExpiredBanner } from './SessionExpiredBanner'
 import type { SessionInfo } from './SessionFooter'
 import { Sidebar } from './Sidebar'
 import { Timeline } from './Timeline'
-import { useConversation } from './use-conversation'
+import { useConversation, type AgentsState, type AgentStatus } from './use-conversation'
 
-/** Pedido de descarte da conversa atual (D13): Nova conversa ou troca de agente. */
-type Discard = { kind: 'new' } | { kind: 'switch'; agent: AgentSummary }
+/** Último turno com uma resposta que a exclusão descartaria (historico-conversas, D13). */
+const PENDING_KINDS = ['sending', 'pending', 'timeout', 'awaiting-login']
 
-const PENDING_NOTE = 'A resposta pendente também será descartada.'
-
-function placeholderFor(agentName: string | null, busy: boolean, agentActive: boolean, expired: boolean): string {
+function placeholderFor(
+  agentName: string | null,
+  busy: boolean,
+  agentStatus: AgentStatus,
+  agents: AgentsState,
+  expired: boolean
+): string {
   if (expired) return 'Entre novamente para continuar'
   if (agentName === null) return 'Mensagem para o agente'
   if (busy) return 'Aguardando a resposta do agente…'
-  if (!agentActive) return `${agentName} está inativo. Escolha outro agente ou comece uma nova conversa.`
+  // Conversa guardada aberta antes da lista (historico-conversas, D12).
+  if (agentStatus === 'unknown') return agents.kind === 'error' ? 'Agentes indisponíveis no momento' : 'Carregando agentes…'
+  if (agentStatus === 'inactive') return `${agentName} está inativo. Escolha outro agente ou comece uma nova conversa.`
   return `Mensagem para ${agentName}`
 }
 
@@ -33,23 +40,10 @@ export function ConversationScreen(props: {
   onRenewed: (expiresAt: string) => void
 }) {
   const { session, onLogout, onRenewed } = props
-  const chat = useConversation()
-  const [discard, setDiscard] = useState<Discard | null>(null)
+  const chat = useConversation(session.serviceUrl)
   const [relogin, setRelogin] = useState(false)
-  const { agents, conversation, busy, agentActive, expired, expiredCase } = chat
-
-  const hasMessages = conversation !== null && conversation.turns.length > 0
-
-  function apply(request: Discard) {
-    if (request.kind === 'switch') chat.startConversation(request.agent, false)
-    else if (conversation !== null) chat.startConversation(conversation.agent, true)
-  }
-
-  function requestDiscard(request: Discard) {
-    // Conversa vazia: nada a perder, sem confirmação.
-    if (hasMessages) setDiscard(request)
-    else apply(request)
-  }
+  const [deleting, setDeleting] = useState<Conversation | null>(null)
+  const { agents, conversation, busy, agentStatus, expired, expiredCase } = chat
 
   function logout() {
     // Antes do logout: nenhuma consulta pode terminar em `unauthorized` depois dele.
@@ -58,7 +52,7 @@ export function ConversationScreen(props: {
   }
 
   const agentList = agents.kind === 'ready' ? agents.agents : []
-  const blocked = expired || conversation === null || busy || !agentActive
+  const blocked = expired || conversation === null || busy || agentStatus !== 'active'
 
   function loggedInAgain(expiresAt: string) {
     setRelogin(false)
@@ -66,15 +60,23 @@ export function ConversationScreen(props: {
     chat.renew()
   }
 
+  // Lido da lista atual: a conversa pode ter mudado desde o clique na lixeira.
+  const toDelete = deleting === null ? null : (chat.conversations.find((c) => c.id === deleting.id) ?? null)
+  const toDeletePending = toDelete !== null && PENDING_KINDS.includes(toDelete.turns.at(-1)?.attempt.kind ?? '')
+
   return (
     <div className="buteco-conversation">
       <Sidebar
         agents={agentList}
-        selectedId={conversation?.agent.id ?? null}
+        agentsReady={agents.kind === 'ready'}
+        conversations={chat.conversations}
+        openConversation={conversation}
         session={session}
         expired={expired}
-        onSelectAgent={(agent) => requestDiscard({ kind: 'switch', agent })}
-        onNewConversation={() => (conversation === null ? chat.retryAgents() : requestDiscard({ kind: 'new' }))}
+        onSelectAgent={chat.selectAgent}
+        onNewConversation={chat.newConversation}
+        onSelectConversation={chat.select}
+        onDeleteConversation={setDeleting}
         onLogout={logout}
         onExpired={chat.expire}
       />
@@ -84,13 +86,19 @@ export function ConversationScreen(props: {
             title={conversation.title}
             contextId={conversation.contextId}
             agentName={conversation.agent.name}
-            agentActive={agentActive}
+            agentStatus={agentStatus}
           />
         )}
         <MainArea chat={chat} />
+        {/* Falha da primeira carga com uma conversa aberta: a conversa continua legível (historico-conversas, D12). */}
+        {conversation !== null && agents.kind === 'error' && (
+          <Box w="100%" maw={760} mx="auto" px={24} pt={4}>
+            <StateBlock title="Não foi possível carregar os agentes." actions={[{ label: 'Tentar de novo', onClick: chat.retryAgents }]} />
+          </Box>
+        )}
         {expired && <SessionExpiredBanner expiredCase={expiredCase} onRelogin={() => setRelogin(true)} />}
         <Composer
-          placeholder={placeholderFor(conversation?.agent.name ?? null, busy, agentActive, expired)}
+          placeholder={placeholderFor(conversation?.agent.name ?? null, busy, agentStatus, agents, expired)}
           blocked={blocked}
           onSend={chat.send}
         />
@@ -102,29 +110,15 @@ export function ConversationScreen(props: {
         onClose={() => setRelogin(false)}
         onLoggedIn={loggedInAgain}
       />
-      <Modal opened={discard !== null} onClose={() => setDiscard(null)} withCloseButton={false} centered>
-        <Stack gap={16}>
-          <Text>
-            {discard?.kind === 'switch'
-              ? 'Trocar de agente começa uma nova conversa e descarta a atual.'
-              : 'Começar uma nova conversa descarta a atual.'}
-            {busy && ` ${PENDING_NOTE}`}
-          </Text>
-          <Group justify="flex-end" gap={8}>
-            <Button variant="default" onClick={() => setDiscard(null)}>
-              Cancelar
-            </Button>
-            <Button
-              onClick={() => {
-                if (discard !== null) apply(discard)
-                setDiscard(null)
-              }}
-            >
-              {discard?.kind === 'switch' ? 'Trocar de agente' : 'Começar nova conversa'}
-            </Button>
-          </Group>
-        </Stack>
-      </Modal>
+      <DeleteConversationModal
+        opened={toDelete !== null && !expired}
+        pending={toDeletePending}
+        onCancel={() => setDeleting(null)}
+        onConfirm={() => {
+          if (toDelete !== null) chat.remove(toDelete.id)
+          setDeleting(null)
+        }}
+      />
     </div>
   )
 }
@@ -132,9 +126,21 @@ export function ConversationScreen(props: {
 /** Área entre o cabeçalho e o composer: estados da lista de agentes, conversa vazia ou timeline (D12, D18 #9). */
 function MainArea({ chat }: { chat: ReturnType<typeof useConversation> }) {
   const { agents, conversation } = chat
+  if (conversation !== null) {
+    if (conversation.turns.length === 0) return <EmptyConversation agent={conversation.agent} />
+    // `key`: ao abrir outra conversa, a timeline monta de novo e rola até o fim (historico-conversas, D11).
+    return (
+      <Timeline
+        key={conversation.id}
+        turns={conversation.turns}
+        agentName={conversation.agent.name}
+        actions={{ resend: chat.resend, keepWaiting: chat.keepWaiting, disabled: chat.expired }}
+      />
+    )
+  }
   // 401 na primeira carga: só o banner, até o novo login refazer a carga (sessao-expirada, D8).
-  if (chat.expired && agents.kind === 'loading' && conversation === null) return <Box style={{ flex: 1 }} />
-  if (agents.kind === 'loading' && conversation === null) {
+  if (chat.expired && agents.kind === 'loading') return <Box style={{ flex: 1 }} />
+  if (agents.kind === 'loading') {
     return (
       <Stack style={{ flex: 1 }} justify="center" align="center">
         <Text c="dimmed">Carregando agentes…</Text>
@@ -148,20 +154,10 @@ function MainArea({ chat }: { chat: ReturnType<typeof useConversation> }) {
       </Stack>
     )
   }
-  if (conversation === null) {
-    const empty = agents.kind === 'ready' && agents.agents.length === 0
-    return (
-      <CenteredCard>
-        <Text c="dimmed">{empty ? 'Nenhum agente cadastrado na plataforma.' : 'Nenhum agente ativo no momento.'}</Text>
-      </CenteredCard>
-    )
-  }
-  if (conversation.turns.length === 0) return <EmptyConversation agent={conversation.agent} />
+  const empty = agents.agents.length === 0
   return (
-    <Timeline
-      turns={conversation.turns}
-      agentName={conversation.agent.name}
-      actions={{ resend: chat.resend, keepWaiting: chat.keepWaiting, disabled: chat.expired }}
-    />
+    <CenteredCard>
+      <Text c="dimmed">{empty ? 'Nenhum agente cadastrado na plataforma.' : 'Nenhum agente ativo no momento.'}</Text>
+    </CenteredCard>
   )
 }

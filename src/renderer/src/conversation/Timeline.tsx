@@ -5,7 +5,7 @@ import { PendingReply } from './blocks/PendingReply'
 import { StateBlock } from './blocks/StateBlock'
 import { UserMessage } from './blocks/UserMessage'
 import { dayLabel, isSameDay, shortTaskId, stateLabel } from './format'
-import type { Attempt, Turn } from './use-conversation'
+import type { Attempt, Turn } from './model'
 
 const NEAR_BOTTOM_PX = 80
 
@@ -126,6 +126,27 @@ function AttemptView({ turn, agentName, actions }: { turn: Turn; agentName: stri
               actions={[resend]}
             />
           )}
+        </AgentSide>
+      )
+    // Normalização ao reabrir (historico-conversas, D15).
+    case 'interrupted':
+      return (
+        <AgentSide>
+          <StateBlock
+            title="Não foi possível confirmar o envio da mensagem."
+            detail="O app foi fechado durante o envio."
+            actions={[resend]}
+          />
+        </AgentSide>
+      )
+    case 'not-sent':
+      return (
+        <AgentSide>
+          <StateBlock
+            title="A mensagem não foi enviada."
+            detail="A sessão terminou antes do envio. Você pode enviá-la de novo."
+            actions={[resend]}
+          />
         </AgentSide>
       )
   }

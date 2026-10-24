@@ -34,11 +34,14 @@ export function durationSeconds(
   server: { submittedAt: string | null; timestamp: string | null },
   local: { startedAt: number; endedAt: number }
 ): number {
-  if (server.submittedAt !== null && server.timestamp !== null) {
-    const diff = Date.parse(server.timestamp) - Date.parse(server.submittedAt)
-    if (Number.isFinite(diff) && diff >= 0) return diff / 1000
-  }
-  return Math.max(0, local.endedAt - local.startedAt) / 1000
+  return serverDurationSeconds(server) ?? Math.max(0, local.endedAt - local.startedAt) / 1000
+}
+
+/** Só a duração pelos horários do servidor; `null` sem um deles ou com diferença negativa. */
+export function serverDurationSeconds(server: { submittedAt: string | null; timestamp: string | null }): number | null {
+  if (server.submittedAt === null || server.timestamp === null) return null
+  const diff = Date.parse(server.timestamp) - Date.parse(server.submittedAt)
+  return Number.isFinite(diff) && diff >= 0 ? diff / 1000 : null
 }
 
 /** `3,2` (uma casa, vírgula decimal). */

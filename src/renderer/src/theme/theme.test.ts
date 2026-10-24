@@ -168,3 +168,42 @@ describe('banner de sessão expirada (sessao-expirada, D11 #8)', () => {
     expect(ratio).toBeGreaterThanOrEqual(4.5)
   })
 })
+
+describe('lista de conversas e botão de exclusão (historico-conversas, D13 e D16)', () => {
+  it('define o texto do item ativo e o vermelho preenchido por esquema', () => {
+    expect(resolve('var(--buteco-color-accent-text)', 'light')).toBe('#1e4d92')
+    expect(resolve('var(--buteco-color-accent-text)', 'dark')).toBe('#b0c8ee')
+    for (const scheme of ['light', 'dark'] as const) {
+      expect(resolve('var(--mantine-color-red-filled)', scheme)).toBe('#cf3a2b')
+      expect(resolve('var(--mantine-color-red-filled-hover)', scheme)).toBe('#c23325')
+    }
+  })
+
+  it.each([
+    ['light', '--buteco-color-accent-text', '--mantine-color-butecoBlue-light'],
+    ['dark', '--buteco-color-accent-text', '--mantine-color-butecoBlue-light'],
+    ['light', '--mantine-color-dimmed', '--mantine-color-default-hover'],
+    ['dark', '--mantine-color-dimmed', '--mantine-color-default-hover']
+  ] as const)('no esquema %s, %s sobre %s tem ≥ 4,5:1', (scheme, text, background) => {
+    const ratio = contrastRatio(resolve(`var(${text})`, scheme), resolve(`var(${background})`, scheme))
+
+    expect(ratio).toBeGreaterThanOrEqual(4.5)
+  })
+
+  it.each([
+    ['light', '--mantine-color-red-filled'],
+    ['dark', '--mantine-color-red-filled'],
+    ['light', '--mantine-color-red-filled-hover'],
+    ['dark', '--mantine-color-red-filled-hover']
+  ] as const)('no esquema %s, branco sobre %s tem ≥ 4,5:1', (scheme, background) => {
+    expect(contrastRatio('#ffffff', resolve(`var(${background})`, scheme))).toBeGreaterThanOrEqual(4.5)
+  })
+
+  it('só o preenchido vermelho é sobrescrito: o contorno dos blocos de falha continua o do Mantine', () => {
+    expect(Object.keys(ours.dark).filter((name) => name.startsWith('--mantine-color-red-'))).toEqual([
+      '--mantine-color-red-filled',
+      '--mantine-color-red-filled-hover'
+    ])
+    expect(ours.light).not.toHaveProperty('--mantine-color-red-filled')
+  })
+})

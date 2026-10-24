@@ -58,7 +58,7 @@ function alertWith(text: string) {
 }
 
 describe('barra lateral', () => {
-  it('mostra, em ordem, marca, AGENTE, seletor, Nova conversa e rodapé', async () => {
+  it('mostra, em ordem, marca, AGENTE, seletor, Nova conversa, busca, lista e rodapé', async () => {
     await renderScreen()
 
     const sidebar = document.querySelector('aside.buteco-sidebar') as HTMLElement
@@ -68,7 +68,8 @@ describe('barra lateral', () => {
       within(sidebar).getByText('AGENTE'),
       agentSelect(),
       within(sidebar).getByRole('button', { name: 'Nova conversa' }),
-      within(sidebar).getByTestId('history-placeholder'),
+      within(sidebar).getByRole('textbox', { name: 'Buscar conversas' }),
+      within(sidebar).getByRole('navigation', { name: 'Conversas' }),
       within(sidebar).getByRole('button', { name: 'Sair' })
     ]
     for (let i = 1; i < order.length; i++) {
@@ -76,15 +77,15 @@ describe('barra lateral', () => {
     }
   })
 
-  it('largura, direção e área reservada vêm de classes, não de estilo inline (D20)', async () => {
+  it('largura, direção e área da lista vêm de classes, não de estilo inline (D20)', async () => {
     await renderScreen()
 
     const root = document.querySelector('.buteco-conversation') as HTMLElement
     const sidebar = root.querySelector('.buteco-sidebar') as HTMLElement
     expect(root.getAttribute('style')).toBeNull()
     expect(sidebar.getAttribute('style')).toBeNull()
-    expect(screen.getByTestId('history-placeholder')).toHaveClass('buteco-sidebar-history')
-    expect(screen.getByTestId('history-placeholder').getAttribute('style')).toBeNull()
+    expect(screen.getByTestId('history')).toHaveClass('buteco-sidebar-history')
+    expect(screen.getByTestId('history').getAttribute('style')).toBeNull()
   })
 
   it('seletor começa no primeiro ativo e oferece o inativo desabilitado', async () => {
@@ -305,7 +306,8 @@ describe('envio e resposta', () => {
       [ATENDENTE.id, 'meu nome é Ana', null],
       [ATENDENTE.id, 'qual é o meu nome?', CONTEXT_ID]
     ])
-    expect(screen.getAllByText('Hoje')).toHaveLength(1)
+    // Fora da timeline, "Hoje" é também o rótulo do grupo na lista de conversas.
+    expect(within(screen.getByRole('main')).getAllByText('Hoje')).toHaveLength(1)
   })
 })
 
@@ -594,48 +596,30 @@ describe('Nova conversa e troca de agente', () => {
     expect(api.agents.list).toHaveBeenCalledTimes(2)
   })
 
-  it('com mensagens, a troca pede confirmação; Cancelar mantém a conversa e o seletor', async () => {
+  it('com mensagens, a troca cria uma conversa nova sem modal; a anterior continua na lista', async () => {
     api.chat.getTask.mockResolvedValue(task('TASK_STATE_COMPLETED', 'ok'))
     await renderScreen()
     await sendMessage('oi')
     await advance(1000)
 
     await chooseAgent('Tradutor')
-    expect(screen.getByText('Trocar de agente começa uma nova conversa e descarta a atual.')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }))
-    await advance(300)
 
-    expect(agentSelect()).toHaveValue('Atendente')
-    expect(screen.getByTestId('user-message')).toBeInTheDocument()
-  })
-
-  it('confirmar a troca mostra a conversa vazia do novo agente', async () => {
-    api.chat.getTask.mockResolvedValue(task('TASK_STATE_COMPLETED', 'ok'))
-    await renderScreen()
-    await sendMessage('oi')
-    await advance(1000)
-
-    await chooseAgent('Tradutor')
-    fireEvent.click(screen.getByRole('button', { name: 'Trocar de agente' }))
-    await advance(300)
-
+    expect(screen.queryByRole('dialog')).toBeNull()
     expect(agentSelect()).toHaveValue('Tradutor')
     expect(screen.queryByTestId('user-message')).toBeNull()
     expect(screen.getByRole('heading', { name: 'Nova conversa' })).toBeInTheDocument()
+    const list = screen.getByRole('navigation', { name: 'Conversas' })
+    expect(within(list).getByRole('button', { name: /^oi/ })).toHaveTextContent('Atendente')
   })
 
-  it('Nova conversa com resposta pendente: avisa, para o polling e a próxima vai sem contextId', async () => {
+  it('Nova conversa com resposta pendente: sem modal, o polling para, a próxima vai sem contextId e A continua pendente', async () => {
     await renderScreen()
     await sendMessage('oi')
     await advance(1000)
 
     fireEvent.click(screen.getByRole('button', { name: 'Nova conversa' }))
     await advance(300)
-    expect(
-      screen.getByText('Começar uma nova conversa descarta a atual. A resposta pendente também será descartada.')
-    ).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Começar nova conversa' }))
-    await advance(300)
+    expect(screen.queryByRole('dialog')).toBeNull()
     const consultas = api.chat.getTask.mock.calls.length
     await advance(5000)
 
@@ -643,6 +627,13 @@ describe('Nova conversa e troca de agente', () => {
     expect(screen.getByText('NOVA CONVERSA COM')).toBeInTheDocument()
     await sendMessage('de novo')
     expect(api.chat.send).toHaveBeenLastCalledWith(ATENDENTE.id, 'de novo', null)
+
+    // Voltar para A retoma a mesma task.
+    const list = screen.getByRole('navigation', { name: 'Conversas' })
+    api.chat.getTask.mockClear()
+    fireEvent.click(within(list).getByRole('button', { name: /^oi/ }))
+    await advance(1000)
+    expect(api.chat.getTask).toHaveBeenCalledWith(ATENDENTE.id, TASK_ID)
   })
 })
 
@@ -779,7 +770,7 @@ describe('sessão expirada (sessao-expirada)', () => {
   it('um segundo sucesso de login sem nova expiração não reenvia', async () => {
     mockButeco()
     const wrapper = ({ children }: { children: ReactNode }) => <MantineProvider>{children}</MantineProvider>
-    const { result } = renderHook(() => useConversation(), { wrapper })
+    const { result } = renderHook(() => useConversation('http://localhost:5017'), { wrapper })
     await flush()
     window.buteco.chat.send = vi.fn<ButecoApi['chat']['send']>(async () => sent()).mockResolvedValueOnce(UNAUTHORIZED)
     act(() => result.current.send('oi'))

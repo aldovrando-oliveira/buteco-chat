@@ -39,7 +39,8 @@ export function AgentReply(props: {
   taskId: string
   text: string
   receivedAt: number
-  durationSeconds: number
+  /** `null`: resposta retomada sem os horários do servidor, sem duração (historico-conversas, D7). */
+  durationSeconds: number | null
 }) {
   const { agentName, taskId, text, receivedAt, durationSeconds } = props
   return (
@@ -56,7 +57,8 @@ export function AgentReply(props: {
         </Group>
         {text.trim() === '' ? <Text c="dimmed">O agente não devolveu texto.</Text> : <Markdown text={text} />}
         <MetaLine>
-          task {shortTaskId(taskId)} · Completed · {formatSeconds(durationSeconds)} s
+          task {shortTaskId(taskId)} · Completed
+          {durationSeconds !== null && ` · ${formatSeconds(durationSeconds)} s`}
         </MetaLine>
       </Stack>
     </Group>

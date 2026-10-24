@@ -51,17 +51,29 @@ Depois do login, a tela de conversas lista os agentes da plataforma no seletor d
   - Se a resposta não chegar em 90 s, dá para continuar aguardando ou reenviar. Reenviar antes confere se a resposta original já chegou.
   - Um agente inativo ou sem modelo configurado recusa a mensagem. Nesse caso não há reenvio: escolha outro agente.
 - **Respostas** são mostradas em Markdown, sem HTML. Links abrem no navegador padrão. Imagens aparecem como link, porque o app não carrega imagens da internet.
-- **Nova conversa** e a troca de agente começam uma conversa nova, sem `contextId`. Se a atual tiver mensagens, o app pede confirmação.
+- **Nova conversa** e a troca de agente começam uma conversa nova, sem `contextId`, sem pedir confirmação: a conversa anterior continua no histórico.
 
-**O que não é guardado:**
-- A conversa existe só na memória do app. Ela se perde ao começar outra, ao sair, ao fechar o app ou ao recarregar a janela.
-- O histórico local de conversas ainda não existe.
+## Histórico de conversas
+
+Cada conversa é guardada neste computador assim que a primeira mensagem é enviada, e aparece na barra lateral, agrupada por data, com o agente e o horário da última atividade. A busca filtra pelo título (o começo da primeira mensagem), sem diferenciar maiúsculas nem acentos. Ao entrar, o app abre a conversa mais recente.
+
+- **Reabrir.** Clicar numa conversa mostra a timeline como estava. Se havia uma resposta em andamento (inclusive ao fechar o app ou recarregar a janela), o app volta a acompanhar a mesma task, sem reenviar a mensagem. Uma mensagem que estava sendo enviada no momento do fechamento aparece como envio interrompido, com **Reenviar**.
+- **Por serviço.** Cada endereço de serviço tem a sua lista. `http://localhost:5017` e `http://127.0.0.1:5017` são serviços diferentes, com históricos separados. **Sair** não apaga o histórico: ao entrar de novo no mesmo serviço, a lista volta.
+- **Limite.** São guardadas até 100 conversas por serviço. Passando disso, ou se o espaço de armazenamento acabar, as conversas mais antigas (pela última atividade) são removidas primeiro. A conversa aberta nunca é removida.
+- **Excluir.** A lixeira ao lado de cada conversa pede confirmação e apaga a conversa só deste computador. Se houver uma resposta em andamento, ela deixa de ser acompanhada. O contexto guardado na plataforma não é apagado, e não há como desfazer. Com a sessão expirada, a exclusão fica bloqueada.
+- **Agente indisponível.** Se o agente de uma conversa foi desativado ou removido da plataforma, a conversa abre normalmente para leitura, e o seletor mostra o agente como "(inativo)". Para continuar, comece uma nova conversa com outro agente.
+
+**Onde fica e o que contém.** O histórico fica no `Local Storage` da pasta de dados do app (`~/Library/Application Support/Buteco Chat/Local Storage/` no macOS; em dev, `Buteco Chat (dev)`), na chave `buteco-chat:sessions:<endereço do serviço>`. É **texto puro, sem criptografia**: qualquer pessoa com acesso à sua conta no computador pode ler as mensagens e as respostas. Senha e token nunca entram nele.
+
+Se o conteúdo gravado estiver corrompido, o app começa com a lista vazia e guarda uma cópia do original em `buteco-chat:sessions-corrupt:<endereço>`. Se ele tiver sido gravado por uma versão mais nova do app, nada é sobrescrito: as conversas dessa sessão ficam só na memória.
+
+Para apagar todo o histórico, feche o app e remova a pasta `Local Storage` da pasta de dados. Isso também apaga o endereço de serviço lembrado.
 
 ### Quando a sessão expira
 
 Quando o tempo do rodapé chega a zero, ou quando a plataforma recusa o token durante o uso (por exemplo, depois de um reinício com outra chave de assinatura), o app **não sai da conversa**:
 - o rodapé mostra "Sessão expirada" e aparece um aviso acima do campo de mensagem com **Entrar novamente**;
-- o envio, **Reenviar**, **Continuar aguardando**, o seletor de agente e **Nova conversa** ficam bloqueados; **Copiar** e **Sair** continuam disponíveis;
+- o envio, **Reenviar**, **Continuar aguardando**, o seletor de agente, **Nova conversa** e a exclusão de conversas ficam bloqueados; ler e buscar outras conversas continua possível; **Copiar** e **Sair** continuam disponíveis;
 - **Entrar novamente** pede só a senha, com o mesmo serviço e o mesmo usuário. Para trocar de conta, use **Sair**.
 
 Depois do novo login, o app retoma de onde parou:
@@ -106,6 +118,8 @@ Para ver os avisos e erros do renderer, como violações de CSP, abra o app pelo
 ```sh
 "release/mac/Buteco Chat.app/Contents/MacOS/Buteco Chat"
 ```
+
+Uma linha como `error messaging the mach port for IMKCFRunLoopWakeUpReliable` vem do macOS (Input Method Kit), não do app, e pode ser ignorada.
 
 ### macOS: app não assinado em outra máquina
 

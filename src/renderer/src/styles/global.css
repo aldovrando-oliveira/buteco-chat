@@ -33,8 +33,74 @@ body {
   border-right: 1px solid var(--mantine-color-default-border);
 }
 
+/* Busca e lista de conversas (historico-conversas, D16). */
 .buteco-sidebar-history {
+  display: flex;
+  flex-direction: column;
   flex: 1;
+  min-height: 0;
+}
+
+.buteco-history-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 4px 8px;
+  border-top: 1px solid var(--mantine-color-default-border);
+}
+
+.buteco-history-group {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.buteco-history-item {
+  position: relative;
+}
+
+.buteco-history-item-button {
+  display: block;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 7px;
+  color: var(--mantine-color-text);
+}
+
+.buteco-history-item-button:hover {
+  background-color: var(--mantine-color-default-hover);
+}
+
+.buteco-history-item-meta {
+  color: var(--mantine-color-dimmed);
+}
+
+.buteco-history-item[data-active] .buteco-history-item-button {
+  background-color: var(--mantine-color-butecoBlue-light);
+  color: var(--buteco-color-accent-text);
+}
+
+.buteco-history-item[data-active] .buteco-history-item-meta {
+  color: var(--buteco-color-accent-text);
+}
+
+/* Com a lixeira, o texto do item não passa por baixo dela. */
+.buteco-history-item:has(.buteco-history-delete) .buteco-history-item-button {
+  padding-right: 38px;
+}
+
+/* Lixeira visível no hover e no foco dentro do item; continua alcançável por Tab. */
+.buteco-history-delete {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+  opacity: 0;
+}
+
+.buteco-history-item:hover .buteco-history-delete,
+.buteco-history-item:focus-within .buteco-history-delete {
+  opacity: 1;
 }
 
 .buteco-main {
@@ -56,8 +122,10 @@ body {
     border-bottom: 1px solid var(--mantine-color-default-border);
   }
 
+  /* A lista continua acessível na largura estreita, com rolagem própria (historico-conversas, D16 #5). */
   .buteco-sidebar-history {
-    display: none;
+    flex: none;
+    max-height: 30vh;
   }
 }
 

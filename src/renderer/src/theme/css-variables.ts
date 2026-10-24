@@ -10,6 +10,9 @@ import { PAGE_BACKGROUND } from '../../../shared/page-background'
  *   e tem 4,5:1 nos dois esquemas (`red-light-color` é quase branco no escuro; `yellow-text` dá 3,7:1 no claro).
  * - Texto do selo **Ativo** (conversa-a2a, D19): `green-light-color` é `green[0]`, quase branco, no escuro.
  * - Aviso no claro em `yellow[9]` (sessao-expirada, D11 #8): `yellow[7]` dá 4,16:1 sobre o `yellow-light` do banner.
+ * - Texto do item ativo da lista (historico-conversas, D16): `butecoBlue-light-color` é `butecoBlue[6]` no claro, com
+ *   4,5:1 exatos sobre o azul 1, sem margem.
+ * - Vermelho preenchido no escuro em `red[6]` (historico-conversas, D13): com o tom 4, o branco dá 2,8:1.
  */
 export const cssVariablesResolver: CSSVariablesResolver = (theme) => ({
   variables: {},
@@ -17,13 +20,17 @@ export const cssVariablesResolver: CSSVariablesResolver = (theme) => ({
     '--buteco-color-page': PAGE_BACKGROUND.light,
     '--buteco-color-error-text': 'var(--mantine-color-red-9)',
     '--buteco-color-warning-text': 'var(--mantine-color-yellow-9)',
-    '--buteco-color-success-text': 'var(--mantine-color-green-9)'
+    '--buteco-color-success-text': 'var(--mantine-color-green-9)',
+    '--buteco-color-accent-text': 'var(--mantine-color-butecoBlue-8)'
   },
   dark: {
     '--buteco-color-page': PAGE_BACKGROUND.dark,
     '--buteco-color-error-text': 'var(--mantine-color-red-4)',
     '--buteco-color-warning-text': 'var(--mantine-color-yellow-4)',
     '--buteco-color-success-text': 'var(--mantine-color-green-4)',
+    '--buteco-color-accent-text': 'var(--mantine-color-butecoBlue-3)',
+    '--mantine-color-red-filled': 'var(--mantine-color-red-6)',
+    '--mantine-color-red-filled-hover': 'var(--mantine-color-red-7)',
     [`--mantine-color-${theme.primaryColor}-filled`]: `var(--mantine-color-${theme.primaryColor}-6)`,
     [`--mantine-color-${theme.primaryColor}-filled-hover`]: `var(--mantine-color-${theme.primaryColor}-7)`
   }

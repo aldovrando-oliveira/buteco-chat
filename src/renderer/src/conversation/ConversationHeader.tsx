@@ -2,6 +2,7 @@ import { Badge, Group, Stack, Text, UnstyledButton } from '@mantine/core'
 import { IconCopy } from '@tabler/icons-react'
 import { useEffect, useState } from 'react'
 import { abbreviateContextId } from './format'
+import type { AgentStatus } from './use-conversation'
 
 export const COPIED_MS = 1500
 
@@ -33,14 +34,17 @@ function CopyButton({ value }: { value: string }) {
   )
 }
 
-/** Cabeçalho da área principal: título, contextId com Copiar, selo do agente e selo Ativo/Inativo. */
+/**
+ * Cabeçalho da área principal: título, contextId com Copiar, selo do agente e selo Ativo/Inativo. Com o agente ainda
+ * desconhecido, só o selo do nome (historico-conversas, D12).
+ */
 export function ConversationHeader(props: {
   title: string | null
   contextId: string | null
   agentName: string
-  agentActive: boolean
+  agentStatus: AgentStatus
 }) {
-  const { title, contextId, agentName, agentActive } = props
+  const { title, contextId, agentName, agentStatus } = props
   return (
     <Group
       component="header"
@@ -78,11 +82,12 @@ export function ConversationHeader(props: {
         <Badge variant="light" color="gray" styles={BADGE_STYLES}>
           {agentName}
         </Badge>
-        {agentActive ? (
+        {agentStatus === 'active' && (
           <Badge variant="light" color="green" c="var(--buteco-color-success-text)" styles={BADGE_STYLES}>
             Ativo
           </Badge>
-        ) : (
+        )}
+        {agentStatus === 'inactive' && (
           <Badge variant="light" color="gray" styles={BADGE_STYLES}>
             Inativo
           </Badge>
