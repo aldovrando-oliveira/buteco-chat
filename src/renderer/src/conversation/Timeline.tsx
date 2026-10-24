@@ -12,6 +12,8 @@ const NEAR_BOTTOM_PX = 80
 export interface TimelineActions {
   resend(turnId: number): void
   keepWaiting(turnId: number): void
+  /** Sessão expirada: Reenviar e Continuar aguardando ficam desabilitados (sessao-expirada, D9). */
+  disabled: boolean
 }
 
 function DaySeparator({ label }: { label: string }) {
@@ -40,12 +42,18 @@ function AgentSide({ children }: { children: ReactNode }) {
 
 function AttemptView({ turn, agentName, actions }: { turn: Turn; agentName: string; actions: TimelineActions }) {
   const attempt: Attempt = turn.attempt
-  const resend = { label: 'Reenviar', onClick: () => actions.resend(turn.id) }
+  const resend = { label: 'Reenviar', onClick: () => actions.resend(turn.id), disabled: actions.disabled }
   switch (attempt.kind) {
     case 'sending':
       return <PendingReply taskId={null} state="TASK_STATE_SUBMITTED" />
     case 'pending':
       return <PendingReply taskId={attempt.taskId} state={attempt.state} />
+    case 'awaiting-login':
+      return attempt.resume === 'poll' ? (
+        <PendingReply taskId={attempt.taskId} state={attempt.state} label="Aguardando novo login para retomar" />
+      ) : (
+        <PendingReply taskId={null} state="TASK_STATE_SUBMITTED" label="Aguardando novo login para enviar" />
+      )
     case 'completed':
       return (
         <AgentReply
@@ -83,7 +91,10 @@ function AttemptView({ turn, agentName, actions }: { turn: Turn; agentName: stri
             title="O agente não respondeu a tempo."
             detail="Se a primeira tentativa terminar depois, o agente pode ver a pergunta duas vezes."
             meta={`task ${shortTaskId(attempt.taskId)} · ${stateLabel(attempt.lastState)}`}
-            actions={[{ label: 'Continuar aguardando', onClick: () => actions.keepWaiting(turn.id) }, resend]}
+            actions={[
+              { label: 'Continuar aguardando', onClick: () => actions.keepWaiting(turn.id), disabled: actions.disabled },
+              resend
+            ]}
           />
         </AgentSide>
       )

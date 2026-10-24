@@ -2,8 +2,12 @@ import { Group, Text } from '@mantine/core'
 import { shortTaskId, stateLabel } from '../format'
 import { AgentAvatar } from './AgentReply'
 
-/** Resposta pendente: avatar com ponto animado e pílula "Processando" com o estado real (D18 #7). */
-export function PendingReply({ taskId, state }: { taskId: string | null; state: string }) {
+/**
+ * Resposta pendente: avatar com ponto animado e pílula "Processando" com o estado real (D18 #7). Na sessão expirada,
+ * o rótulo diz o que espera o novo login (sessao-expirada, D11 #3).
+ */
+export function PendingReply(props: { taskId: string | null; state: string; label?: string }) {
+  const { taskId, state, label = 'Processando' } = props
   return (
     <Group gap={10} align="center" wrap="nowrap" role="status">
       <AgentAvatar pending />
@@ -21,7 +25,7 @@ export function PendingReply({ taskId, state }: { taskId: string | null; state: 
           <span className="buteco-dot" />
         </Group>
         <Text fz={12} c="dimmed">
-          Processando
+          {label}
         </Text>
         {taskId !== null && (
           <Text ff="monospace" fz={11} c="dimmed">

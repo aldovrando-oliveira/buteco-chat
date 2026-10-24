@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { FetchLike } from '../http/classify'
+import { createAuthService } from '../auth/service'
 import { createChatClient, MAX_AGENTS_BODY, REQUEST_TIMEOUT_MS } from './client'
 
 const AGENT = '3a7d9f10-1b2c-4d5e-8f90-0a1b2c3d4e5f'
@@ -28,6 +29,7 @@ const hanging: FetchLike = (_url, init) =>
   })
 
 let uuid = 0
+const discard = vi.fn<(token: string) => void>()
 
 function client(fetch: FetchLike, session: { serviceUrl: string | null; token: string | null } = {
   serviceUrl: 'http://localhost:5017',
@@ -42,7 +44,8 @@ function client(fetch: FetchLike, session: { serviceUrl: string | null; token: s
         username: session.token === null ? null : 'ana',
         expiresAt: null
       }),
-      getToken: () => session.token
+      getToken: () => session.token,
+      discard
     },
     setTimeout: (callback, ms) => setTimeout(callback, ms),
     clearTimeout: (handle) => clearTimeout(handle),
@@ -59,6 +62,7 @@ function sentBody(fetch: ReturnType<typeof vi.fn<FetchLike>>, n = 0): Record<str
 afterEach(() => {
   vi.useRealTimers()
   vi.restoreAllMocks()
+  discard.mockReset()
 })
 
 describe('GET /agents', () => {
@@ -421,5 +425,65 @@ describe('sessão e token', () => {
     }).getTask(AGENT, 't-1')
 
     for (const spy of spies) expect(spy).not.toHaveBeenCalled()
+  })
+})
+
+describe('401 descarta o token usado (sessao-expirada, D3)', () => {
+  it('em /agents, SendMessage e GetTask, discard recebe o token da requisição', async () => {
+    const chat = client(async () => new Response(null, { status: 401 }))
+
+    for (const result of [await chat.listAgents(), await chat.send(AGENT, 'oi', null), await chat.getTask(AGENT, 't-1')]) {
+      expect(result).toEqual({ ok: false, error: { kind: 'unauthorized' } })
+    }
+    expect(discard.mock.calls).toEqual([[TOKEN], [TOKEN], [TOKEN]])
+  })
+
+  it('sem token: unauthorized sem rede e sem discard', async () => {
+    const fetch = vi.fn<FetchLike>()
+    await client(fetch, { serviceUrl: 'http://localhost:5017', token: null }).getTask(AGENT, 't-1')
+
+    expect(fetch).not.toHaveBeenCalled()
+    expect(discard).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['rpc', () => json(200, { jsonrpc: '2.0', id: 1, error: { code: -32001, message: 'x' } })],
+    ['http 500', () => new Response(null, { status: 500 })],
+    [
+      'unreachable',
+      () => {
+        throw new Error('net::ERR_CONNECTION_REFUSED')
+      }
+    ]
+  ])('%s não chama discard', async (_label, respond) => {
+    await client(async () => respond()).getTask(AGENT, 't-1')
+
+    expect(discard).not.toHaveBeenCalled()
+  })
+
+  it('401 de uma requisição com o token antigo não derruba a sessão de um login mais novo', async () => {
+    const tokens = ['velho', 'novo']
+    const auth = createAuthService({
+      fetch: async () => json(200, { token: tokens.shift(), expiresAt: '2099-01-01T00:00:00Z' }),
+      now: () => Date.now(),
+      setTimeout: (callback, ms) => setTimeout(callback, ms),
+      clearTimeout: (handle) => clearTimeout(handle)
+    })
+    await auth.login('http://localhost:5017', 'ana', 's3nha')
+    let respond!: (response: Response) => void
+    const chat = createChatClient({
+      fetch: () => new Promise<Response>((resolve) => (respond = resolve)),
+      auth,
+      setTimeout: (callback, ms) => setTimeout(callback, ms),
+      clearTimeout: (handle) => clearTimeout(handle),
+      randomUUID: () => '00000000-0000-4000-8000-000000000000'
+    })
+
+    const pending = chat.getTask(AGENT, 't-1')
+    await auth.login('http://localhost:5017', 'ana', 's3nha')
+    respond(new Response(null, { status: 401 }))
+
+    expect(await pending).toEqual({ ok: false, error: { kind: 'unauthorized' } })
+    expect(auth.getToken()).toBe('novo')
   })
 })

@@ -325,3 +325,48 @@ describe('ciclo da sessão', () => {
     await expect(auth.login('http://user:pass@host', 'ana', 's3nha')).rejects.toThrow(/^serviceUrl inválido\.$/)
   })
 })
+
+describe('discard (sessao-expirada, D3)', () => {
+  const LOGGED_OUT = { authenticated: false, serviceUrl: null, username: null, expiresAt: null }
+
+  it('com o token atual, limpa a sessão', async () => {
+    const auth = service(async () => ok('abc'))
+    await auth.login('http://localhost:5017', 'ana', 's3nha')
+
+    auth.discard('abc')
+
+    expect(auth.status()).toEqual(LOGGED_OUT)
+    expect(auth.getToken()).toBeNull()
+  })
+
+  it('com outro token, não muda nada', async () => {
+    const auth = service(async () => ok('novo'))
+    await auth.login('http://localhost:5017', 'ana', 's3nha')
+
+    auth.discard('velho')
+
+    expect(auth.status().authenticated).toBe(true)
+    expect(auth.getToken()).toBe('novo')
+  })
+
+  it('sem sessão, não muda nada', () => {
+    const auth = service(async () => ok())
+
+    auth.discard('abc')
+
+    expect(auth.status()).toEqual(LOGGED_OUT)
+  })
+
+  it('durante um login, não o aborta, e o login termina com o token novo', async () => {
+    const { fetch, respond } = deferred()
+    const auth = service(fetch)
+    const pending = auth.login('http://localhost:5017', 'ana', 's3nha')
+
+    auth.discard('velho')
+    respond(ok('novo'))
+
+    expect((await pending).ok).toBe(true)
+    expect(fetch.mock.calls[0]![1].signal?.aborted).toBe(false)
+    expect(auth.getToken()).toBe('novo')
+  })
+})

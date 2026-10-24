@@ -6,6 +6,7 @@ const ERROR_TEXT = 'var(--buteco-color-error-text)'
 export interface StateAction {
   label: string
   onClick: () => void
+  disabled?: boolean
 }
 
 /**
@@ -37,6 +38,7 @@ export function StateBlock(props: { title: string; detail?: string; meta?: strin
                   color="red"
                   size="xs"
                   styles={{ root: { color: ERROR_TEXT, borderColor: ERROR_TEXT } }}
+                  disabled={action.disabled}
                   onClick={action.onClick}
                 >
                   {action.label}

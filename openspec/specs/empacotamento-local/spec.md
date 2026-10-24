@@ -25,7 +25,7 @@ O script `package` SHALL gerar, em `release/`, o app empacotado com `electron-bu
 - **THEN** `release/` contém um app executável para o SO e a arquitetura locais
 
 ### Requirement: Teste de fumaça do pacote
-Antes de considerar a change pronta, o app empacotado SHALL passar por um teste de fumaça manual, iniciado pelo terminal, que confirma: a janela abre sem flash branco; a casca aparece com Plex Sans e Plex Mono carregadas; o tema claro e o escuro funcionam, alternando o tema do sistema; no esquema escuro, nem a janela nem o primeiro quadro do React aparecem claros; `window.buteco` existe; pelo DevTools do pacote, `window.open('https://example.com')` e `location.href = 'https://example.com'` abrem o navegador padrão sem navegar o app, e `location.href = 'file:///etc/hosts'` não tem efeito; e há zero violações de CSP no stdout e no console. A casca não ganha link para esse teste.
+Antes de uma versão do pacote ser considerada pronta, o app empacotado SHALL passar por um teste de fumaça manual, iniciado pelo terminal, que confirma: a janela abre sem flash branco; a casca aparece com Plex Sans e Plex Mono carregadas; o tema claro e o escuro funcionam, alternando o tema do sistema; no esquema escuro, nem a janela nem o primeiro quadro do React aparecem claros; `window.buteco` existe; pelo DevTools do pacote, `window.open('https://example.com')` e `location.href = 'https://example.com'` abrem o navegador padrão sem navegar o app, e `location.href = 'file:///etc/hosts'` não tem efeito; e há zero violações de CSP no stdout e no console. A casca não ganha link para esse teste.
 
 #### Scenario: Fumaça aprovada
 - **WHEN** o pacote é aberto pelo terminal e os itens do teste de fumaça são verificados
@@ -33,7 +33,7 @@ Antes de considerar a change pronta, o app empacotado SHALL passar por um teste 
 
 #### Scenario: Falha sob file://
 - **WHEN** o teste de fumaça encontra fontes ou módulos bloqueados pela CSP sob `file://`
-- **THEN** a change não é dada como pronta, e a correção é migrar para um protocolo próprio (`protocol.handle`), nunca afrouxar a CSP
+- **THEN** o pacote não é dado como pronto, e a correção é migrar para um protocolo próprio (`protocol.handle`), nunca afrouxar a CSP
 
 ### Requirement: Arquivos ignorados e documentação
 O repositório SHALL ter um `.gitignore` com `node_modules/`, `out/`, `dist/` e `release/`, e um `README.md` em pt-BR que explique os pré-requisitos, os scripts, a arquitetura em alto nível (main, preload, renderer, shared) e, no macOS, como liberar o app não assinado com `xattr -cr`.

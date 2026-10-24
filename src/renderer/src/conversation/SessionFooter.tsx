@@ -13,20 +13,31 @@ export interface SessionInfo {
 }
 
 /**
- * Rodapé da barra lateral: avatar com iniciais, "{usuário} @ {host}", tempo restante e **Sair** só de ícone.
- * Era o destino provisório da login-operador (D14 de lá).
+ * Rodapé da barra lateral: avatar com iniciais, "{usuário} @ {host}", tempo restante (ou "Sessão expirada") e **Sair**
+ * só de ícone. Era o destino provisório da login-operador (D14 de lá).
  */
-export function SessionFooter(props: { session: SessionInfo; onLogout: () => void; onExpired: () => void }) {
-  const { session, onLogout, onExpired } = props
+export function SessionFooter(props: {
+  session: SessionInfo
+  expired: boolean
+  onLogout: () => void
+  onExpired: () => void
+}) {
+  const { session, expired, onLogout, onExpired } = props
   const expiresAtMs = Date.parse(session.expiresAt)
   const [now, setNow] = useState(Date.now)
   const remainingMs = expiresAtMs - now
 
+  // Novo login: o relógio parou no vencimento, e o tempo restante é contado de novo a partir de agora.
+  useEffect(() => setNow(Date.now()), [session.expiresAt])
+
   useEffect(() => {
-    // Ao chegar a zero, quem decide é o main (status), sem mensagem: o aviso é da `sessao-expirada`.
-    // Se o main ainda responder autenticado, tenta de novo no próximo tique.
-    if (remainingMs <= 0) onExpired()
-    const timer = setTimeout(() => setNow(Date.now()), remainingMs > 0 ? Math.min(TICK_MS, remainingMs) : TICK_MS)
+    // Ao chegar a zero, a sessão expira direto, sem `status()`: main e renderer usam o mesmo relógio
+    // (sessao-expirada, D1). O contador para até um novo login trocar o `expiresAt`.
+    if (remainingMs <= 0) {
+      onExpired()
+      return
+    }
+    const timer = setTimeout(() => setNow(Date.now()), Math.min(TICK_MS, remainingMs))
     return () => clearTimeout(timer)
   }, [remainingMs, onExpired])
 
@@ -65,9 +76,15 @@ export function SessionFooter(props: { session: SessionInfo; onLogout: () => voi
               @ {host}
             </Text>
           </Group>
-          <Text fz={11} c="dimmed">
-            Sessão válida por mais {minutes} min
-          </Text>
+          {expired ? (
+            <Text fz={11} c="var(--mantine-color-red-text)">
+              Sessão expirada
+            </Text>
+          ) : (
+            <Text fz={11} c="dimmed">
+              Sessão válida por mais {minutes} min
+            </Text>
+          )}
         </Stack>
       </Group>
       <ActionIcon variant="subtle" color="gray" aria-label="Sair" onClick={onLogout}>

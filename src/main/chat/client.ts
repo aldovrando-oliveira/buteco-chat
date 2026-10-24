@@ -5,7 +5,7 @@ import { classifyRejection, ISO_DATE_TIME, isOpaqueRedirect, type FetchLike } fr
 
 export interface ChatClientDeps<TimerHandle = unknown> {
   fetch: FetchLike
-  auth: Pick<AuthService, 'status' | 'getToken'>
+  auth: Pick<AuthService, 'status' | 'getToken' | 'discard'>
   // Injetados para o timeout obedecer aos timers falsos do Vitest (login-operador, D3).
   setTimeout(callback: () => void, ms: number): TimerHandle
   clearTimeout(handle: TimerHandle): void
@@ -80,8 +80,12 @@ export function createChatClient<TimerHandle>(deps: ChatClientDeps<TimerHandle>)
         signal: controller.signal
       })
       if (isOpaqueRedirect(response)) return { ok: false, error: { kind: 'http', status: 0 } }
-      // 401 chega com corpo vazio, antes do JSON-RPC: o corpo nem é lido.
-      if (response.status === 401) return { ok: false, error: { kind: 'unauthorized' } }
+      // 401 chega com corpo vazio, antes do JSON-RPC: o corpo nem é lido. Descarta só o token usado aqui: se um login
+      // mais novo já trocou o token, a sessão nova continua (sessao-expirada, D3).
+      if (response.status === 401) {
+        deps.auth.discard(token)
+        return { ok: false, error: { kind: 'unauthorized' } }
+      }
       if (response.status !== 200) return { ok: false, error: { kind: 'http', status: response.status } }
       const text = await response.text()
       if (text.length > maxBody) return BAD

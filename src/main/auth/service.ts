@@ -25,6 +25,11 @@ export interface AuthService {
   status(): AuthStatus
   /** Só para o main (próximas changes). Nunca exposto por IPC. */
   getToken(): string | null
+  /**
+   * Descarta a sessão só se `token` ainda for o atual (sessao-expirada, D3): um 401 de uma requisição feita com um token
+   * antigo não derruba a sessão de um login mais novo. Não aborta login em andamento. Nunca exposto por IPC.
+   */
+  discard(token: string): void
 }
 
 export const LOGIN_TIMEOUT_MS = 15_000
@@ -131,6 +136,9 @@ export function createAuthService<TimerHandle>(deps: AuthServiceDeps<TimerHandle
     },
     getToken() {
       return currentSession()?.token ?? null
+    },
+    discard(token) {
+      if (session !== null && session.token === token) session = null
     }
   }
 }

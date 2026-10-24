@@ -13,6 +13,16 @@ export type Attempt =
   | { kind: 'timeout'; taskId: string; lastState: PendingState; submittedAt: string | null; startedAtLocal: number }
   | { kind: 'send-error'; error: ChatError }
   | { kind: 'poll-error'; taskId: string }
+  // Sessão expirada (sessao-expirada, D4): o que retomar depois do novo login.
+  | { kind: 'awaiting-login'; resume: 'send' }
+  | {
+      kind: 'awaiting-login'
+      resume: 'poll'
+      taskId: string
+      state: PendingState
+      submittedAt: string | null
+      startedAtLocal: number
+    }
 
 export interface Turn {
   id: number
@@ -30,9 +40,16 @@ export interface Conversation {
 
 export type AgentsState = { kind: 'loading' } | { kind: 'error' } | { kind: 'ready'; agents: AgentSummary[] }
 
+/** O que o banner e o modal da sessão expirada explicam (sessao-expirada, D11 #1 e #2). */
+export type ExpiredCase = 'poll' | 'send' | 'idle'
+
 type Pending = Extract<Attempt, { kind: 'pending' }>
 
-const BUSY: readonly Attempt['kind'][] = ['sending', 'pending', 'timeout']
+const BUSY: readonly Attempt['kind'][] = ['sending', 'pending', 'timeout', 'awaiting-login']
+
+function awaitingPoll({ taskId, state, submittedAt, startedAtLocal }: Pending): Attempt {
+  return { kind: 'awaiting-login', resume: 'poll', taskId, state, submittedAt, startedAtLocal }
+}
 
 function isTerminal(state: TaskState): boolean {
   return state === 'TASK_STATE_COMPLETED' || state === 'TASK_STATE_FAILED' || state === 'TASK_STATE_REJECTED'
@@ -56,12 +73,13 @@ function finished(pending: Pending, snapshot: TaskSnapshot): Attempt {
 }
 
 /**
- * Estado da tela de conversas: lista de agentes, a conversa atual (em memória) e o turno em andamento.
- * `onSessionEnded` é chamado em qualquer `unauthorized` (D14), depois de parar o polling.
+ * Estado da tela de conversas: lista de agentes, a conversa atual (em memória), o turno em andamento e a sessão
+ * expirada. Um `unauthorized` nunca sai da tela: guarda o que retomar e espera o novo login (sessao-expirada, D1).
  */
-export function useConversation(onSessionEnded: () => void) {
+export function useConversation() {
   const [agents, setAgents] = useState<AgentsState>({ kind: 'loading' })
   const [conversation, setConversation] = useState<Conversation | null>(null)
+  const [expired, setExpired] = useState(false)
 
   // Refs para os callbacks assíncronos lerem o estado atual sem depender de re-render.
   const conversationRef = useRef<Conversation | null>(null)
@@ -70,8 +88,12 @@ export function useConversation(onSessionEnded: () => void) {
   const nextTurnId = useRef(1)
   const pollingTurn = useRef<number | null>(null)
   const pollerRef = useRef<TaskPoller | null>(null)
-  const onSessionEndedRef = useRef(onSessionEnded)
-  onSessionEndedRef.current = onSessionEnded
+  const expiredRef = useRef(false)
+  // Época da sessão, trocada a cada novo login (D7): um `unauthorized` de uma chamada iniciada antes dele é do token
+  // antigo e não expira a sessão nova.
+  const epoch = useRef(0)
+  // Carga da lista recusada com `unauthorized`, refeita depois do novo login (D8).
+  const agentsAfterLogin = useRef<'initial' | 'reload' | null>(null)
 
   const commit = useCallback((next: Conversation | null) => {
     conversationRef.current = next
@@ -87,12 +109,28 @@ export function useConversation(onSessionEnded: () => void) {
     [commit]
   )
 
-  const endSession = useCallback(() => {
+  const pendingOf = useCallback((turnId: number): Pending | null => {
+    const turn = conversationRef.current?.turns.find((t) => t.id === turnId)
+    return turn?.attempt.kind === 'pending' ? turn.attempt : null
+  }, [])
+
+  /**
+   * Entra na sessão expirada (D1), idempotente. Não troca a geração: um `chat.send` em andamento tem o resultado
+   * aproveitado (D4). O polling para, e a task pendente fica guardada no turno. Um turno em prazo esgotado não tem
+   * consulta agendada e fica como está.
+   */
+  const expire = useCallback(() => {
+    if (!expiredRef.current) {
+      expiredRef.current = true
+      setExpired(true)
+    }
+    const turnId = pollingTurn.current
+    const pending = turnId === null ? null : pendingOf(turnId)
+    if (turnId === null || !pending) return
     pollerRef.current?.stop()
     pollingTurn.current = null
-    generation.current++
-    onSessionEndedRef.current()
-  }, [])
+    updateTurn(turnId, awaitingPoll(pending))
+  }, [pendingOf, updateTurn])
 
   const loadAgents = useCallback(
     async (initial: boolean) => {
@@ -100,11 +138,17 @@ export function useConversation(onSessionEnded: () => void) {
         agentsRef.current = { kind: 'loading' }
         setAgents(agentsRef.current)
       }
+      const myEpoch = epoch.current
       const result = await window.buteco.agents.list()
       if (!result.ok) {
-        // Sessão terminada nunca é silenciosa; outras falhas de recarga mantêm a lista anterior (D12).
-        if (result.error.kind === 'unauthorized') endSession()
-        else if (initial || agentsRef.current.kind !== 'ready') {
+        // Sessão expirada nunca é silenciosa; outras falhas de recarga mantêm a lista anterior (D12 da conversa-a2a).
+        if (result.error.kind === 'unauthorized') {
+          const neverLoaded = initial || agentsRef.current.kind !== 'ready'
+          // Recusada com o token de antes do novo login: carrega de novo, com o token novo (D7).
+          if (myEpoch !== epoch.current) return void loadAgents(neverLoaded)
+          if (agentsAfterLogin.current !== 'initial') agentsAfterLogin.current = neverLoaded ? 'initial' : 'reload'
+          expire()
+        } else if (initial || agentsRef.current.kind !== 'ready') {
           agentsRef.current = { kind: 'error' }
           setAgents(agentsRef.current)
         }
@@ -117,13 +161,8 @@ export function useConversation(onSessionEnded: () => void) {
         if (firstActive) commit({ agent: firstActive, contextId: null, title: null, turns: [] })
       }
     },
-    [commit, endSession]
+    [commit, expire]
   )
-
-  const pendingOf = useCallback((turnId: number): Pending | null => {
-    const turn = conversationRef.current?.turns.find((t) => t.id === turnId)
-    return turn?.attempt.kind === 'pending' ? turn.attempt : null
-  }, [])
 
   const finish = useCallback(
     (turnId: number, pending: Pending, snapshot: TaskSnapshot) => {
@@ -135,7 +174,7 @@ export function useConversation(onSessionEnded: () => void) {
   )
 
   // O poller é criado uma vez e guarda os callbacks deste primeiro render. Por isso `pendingOf`, `updateTurn`, `finish`
-  // e `endSession` precisam continuar estáveis (só dependências estáveis nos `useCallback`). Uma dependência nova em
+  // e `expire` precisam continuar estáveis (só dependências estáveis nos `useCallback`). Uma dependência nova em
   // qualquer um deles exige trocar estes eventos por refs, senão o poller chamaria a versão antiga.
   if (pollerRef.current === null) {
     pollerRef.current = createTaskPoller(
@@ -164,9 +203,10 @@ export function useConversation(onSessionEnded: () => void) {
           updateTurn(turnId, { kind: 'timeout', taskId, lastState, submittedAt, startedAtLocal })
         },
         onError(error) {
+          // `unauthorized`: `expire` guarda a task do turno ainda pendente para a retomada (D4).
+          if (error.kind === 'unauthorized') return expire()
           const turnId = pollingTurn.current
           pollingTurn.current = null
-          if (error.kind === 'unauthorized') return endSession()
           const pending = turnId === null ? null : pendingOf(turnId)
           if (turnId !== null && pending) updateTurn(turnId, { kind: 'poll-error', taskId: pending.taskId })
         }
@@ -174,18 +214,29 @@ export function useConversation(onSessionEnded: () => void) {
     )
   }
 
-  /** Um envio (novo ou Reenviar) para o turno `turnId`, no `contextId` atual da conversa. */
+  /**
+   * Um envio (novo, Reenviar ou retomada) para o turno `turnId`, no `contextId` atual da conversa. Com a sessão
+   * expirada, nada sai: o turno espera o novo login (D4).
+   */
   const dispatch = useCallback(
     async (turnId: number, text: string) => {
       const current = conversationRef.current
       if (current === null) return
+      if (expiredRef.current) return updateTurn(turnId, { kind: 'awaiting-login', resume: 'send' })
       const myGeneration = generation.current
+      const myEpoch = epoch.current
       updateTurn(turnId, { kind: 'sending' })
       const startedAtLocal = Date.now()
       const result = await window.buteco.chat.send(current.agent.id, text, current.contextId)
       if (myGeneration !== generation.current) return
       if (!result.ok) {
-        if (result.error.kind === 'unauthorized') return endSession()
+        // 401 no envio: a mensagem não foi registrada. Com o token de antes do novo login, vai de novo agora; senão,
+        // depois do novo login (D4, D7).
+        if (result.error.kind === 'unauthorized' && myEpoch !== epoch.current) return dispatch(turnId, text)
+        if (result.error.kind === 'unauthorized') {
+          updateTurn(turnId, { kind: 'awaiting-login', resume: 'send' })
+          return expire()
+        }
         return updateTurn(turnId, { kind: 'send-error', error: result.error })
       }
       const { taskId, contextId, state, submittedAt } = result.value
@@ -202,11 +253,13 @@ export function useConversation(onSessionEnded: () => void) {
         finish(turnId, pending, { state, text: null, timestamp: submittedAt })
         return
       }
+      // A sessão expirou durante o envio: a task existe, e o polling dela começa depois do novo login (D4).
+      if (expiredRef.current) return updateTurn(turnId, awaitingPoll(pending))
       updateTurn(turnId, pending)
       pollingTurn.current = turnId
       pollerRef.current!.start(taskId, startedAtLocal, pending.state)
     },
-    [commit, endSession, finish, updateTurn]
+    [commit, expire, finish, updateTurn]
   )
 
   const send = useCallback(
@@ -229,36 +282,69 @@ export function useConversation(onSessionEnded: () => void) {
       if (!turn || turn.id !== turnId) return
       const { attempt } = turn
       if (attempt.kind === 'timeout') {
+        if (expiredRef.current) return
         const myGeneration = generation.current
+        const myEpoch = epoch.current
         pollerRef.current!.stop()
         updateTurn(turnId, { kind: 'sending' })
         const original = await window.buteco.chat.getTask(conversationRef.current!.agent.id, attempt.taskId)
         if (myGeneration !== generation.current) return
-        // Sessão terminada não vira reenvio: o envio daria `unauthorized` de novo, depois de um request inútil (D14).
-        if (!original.ok && original.error.kind === 'unauthorized') return endSession()
+        // Nada foi enviado: o turno volta ao prazo esgotado, e a decisão continua do usuário depois do login (D4).
+        if (!original.ok && original.error.kind === 'unauthorized') {
+          updateTurn(turnId, attempt)
+          // Com o token de antes do novo login, a sessão nova continua (D7).
+          return myEpoch === epoch.current ? expire() : undefined
+        }
         if (original.ok && original.value.state === 'TASK_STATE_COMPLETED') {
           const { taskId, submittedAt, startedAtLocal } = attempt
           const pending: Pending = { kind: 'pending', taskId, state: attempt.lastState, submittedAt, startedAtLocal }
           return finish(turnId, pending, original.value)
         }
-      } else if (!['failed', 'send-error', 'poll-error'].includes(attempt.kind)) return
+      } else if (expiredRef.current || !['failed', 'send-error', 'poll-error'].includes(attempt.kind)) return
       await dispatch(turnId, turn.text)
     },
-    [dispatch, endSession, finish, updateTurn]
+    [dispatch, expire, finish, updateTurn]
   )
 
-  /** Continuar aguardando: mesma task, prazo novo (D9). */
+  /**
+   * Continuar aguardando: mesma task, prazo novo (D9). `start` em vez de `extend`: depois de um 401 no `getTask` prévio
+   * de Reenviar, o poller já não guarda a task (sessao-expirada, D4).
+   */
   const keepWaiting = useCallback(
     (turnId: number) => {
       const turn = conversationRef.current?.turns.at(-1)
-      if (!turn || turn.id !== turnId || turn.attempt.kind !== 'timeout') return
+      if (expiredRef.current || !turn || turn.id !== turnId || turn.attempt.kind !== 'timeout') return
       const { taskId, lastState, submittedAt, startedAtLocal } = turn.attempt
       updateTurn(turnId, { kind: 'pending', taskId, state: lastState, submittedAt, startedAtLocal })
       pollingTurn.current = turnId
-      pollerRef.current!.extend()
+      pollerRef.current!.start(taskId, Date.now(), lastState)
     },
     [updateTurn]
   )
+
+  /**
+   * Novo login bem-sucedido (D7): síncrono, e só com a sessão expirada, para um segundo sucesso não retomar nada.
+   * O turno guardado retoma o polling (prazo novo, D5) ou envia uma vez; a lista recusada é recarregada.
+   */
+  const renew = useCallback(() => {
+    if (!expiredRef.current) return
+    expiredRef.current = false
+    epoch.current++
+    setExpired(false)
+    const turn = conversationRef.current?.turns.at(-1)
+    if (turn?.attempt.kind === 'awaiting-login') {
+      const { attempt } = turn
+      if (attempt.resume === 'poll') {
+        const { taskId, state, submittedAt, startedAtLocal } = attempt
+        updateTurn(turn.id, { kind: 'pending', taskId, state, submittedAt, startedAtLocal })
+        pollingTurn.current = turn.id
+        pollerRef.current!.start(taskId, Date.now(), state)
+      } else void dispatch(turn.id, turn.text)
+    }
+    const agentsLoad = agentsAfterLogin.current
+    agentsAfterLogin.current = null
+    if (agentsLoad !== null) void loadAgents(agentsLoad === 'initial')
+  }, [dispatch, loadAgents, updateTurn])
 
   /** Nova conversa ou troca de agente (D13): descarta a atual e para o polling. A confirmação é da tela. */
   const startConversation = useCallback(
@@ -293,12 +379,17 @@ export function useConversation(onSessionEnded: () => void) {
   const listed = agents.kind === 'ready' ? agents.agents.find((a) => a.id === conversation?.agent.id) : undefined
   // Ausente da lista conta como inativo (D12). Antes da lista carregar não há conversa.
   const agentActive = conversation !== null && listed !== undefined && listed.isActive
+  const expiredCase: ExpiredCase = last?.attempt.kind === 'awaiting-login' ? last.attempt.resume : 'idle'
 
   return {
     agents,
     conversation,
     busy,
     agentActive,
+    expired,
+    expiredCase,
+    expire,
+    renew,
     retryAgents: () => void loadAgents(true),
     send,
     resend: (turnId: number) => void resend(turnId),

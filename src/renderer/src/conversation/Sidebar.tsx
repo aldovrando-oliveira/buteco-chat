@@ -45,27 +45,40 @@ export function Sidebar(props: {
   agents: AgentSummary[]
   selectedId: string | null
   session: SessionInfo
+  /** Sessão expirada: seletor e Nova conversa bloqueados até o novo login (sessao-expirada, D9). */
+  expired: boolean
   onSelectAgent: (agent: AgentSummary) => void
   onNewConversation: () => void
   onLogout: () => void
   onExpired: () => void
 }) {
-  const { agents, selectedId, session, onSelectAgent, onNewConversation, onLogout, onExpired } = props
+  const { agents, selectedId, session, expired, onSelectAgent, onNewConversation, onLogout, onExpired } = props
   return (
     <aside className="buteco-sidebar">
       <Stack gap={14} p={14}>
         <Brand compact />
         <Stack gap={6}>
           <SectionLabel>AGENTE</SectionLabel>
-          <AgentSelect agents={agents} selectedId={selectedId} disabled={agents.length === 0} onSelect={onSelectAgent} />
+          <AgentSelect
+            agents={agents}
+            selectedId={selectedId}
+            disabled={expired || agents.length === 0}
+            onSelect={onSelectAgent}
+          />
         </Stack>
-        <Button fullWidth h={34} leftSection={<IconPlus size={16} aria-hidden />} onClick={onNewConversation}>
+        <Button
+          fullWidth
+          h={34}
+          leftSection={<IconPlus size={16} aria-hidden />}
+          disabled={expired}
+          onClick={onNewConversation}
+        >
           Nova conversa
         </Button>
       </Stack>
       {/* Busca e lista de conversas: `historico-conversas`. */}
       <Box className="buteco-sidebar-history" data-testid="history-placeholder" />
-      <SessionFooter session={session} onLogout={onLogout} onExpired={onExpired} />
+      <SessionFooter session={session} expired={expired} onLogout={onLogout} onExpired={onExpired} />
     </aside>
   )
 }

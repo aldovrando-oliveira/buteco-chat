@@ -1,16 +1,11 @@
-import { Box, Button, Group, Input, Paper, Stack, Text, TextInput, Title } from '@mantine/core'
-import { IconServer } from '@tabler/icons-react'
+import { Button, Paper, Stack, Text, TextInput, Title } from '@mantine/core'
 import { useState, type FormEvent } from 'react'
 import type { ChatError } from '../../../shared/api'
 import { parseServiceUrl } from '../../../shared/service-url'
 import { Brand } from './Brand'
-import { INSECURE_ADDRESS_WARNING, INVALID_ADDRESS_MESSAGE, loginErrorMessage } from './login-messages'
+import { FIELD_STYLES, HINT, LoginErrorBlock, MONO_12, ServiceRow } from './login-fields'
+import { INSECURE_ADDRESS_WARNING, INVALID_ADDRESS_MESSAGE } from './login-messages'
 import { readSavedServiceUrl, saveServiceUrl } from './saved-service-url'
-
-// Medidas do protótipo: campos com 34 px e raio 7 px (radius "sm"), rótulos em peso 500.
-const FIELD_STYLES = { input: { height: 34, minHeight: 34 }, label: { fontWeight: 500 } }
-const MONO_12 = { fontFamily: 'var(--mantine-font-family-monospace)', fontSize: 12 }
-const HINT = { fontSize: 12 }
 
 /** Tela de login nas duas variantes: primeiro acesso (campo de endereço) e acessos seguintes (linha "Serviço"). */
 export function LoginScreen({ onLoggedIn }: { onLoggedIn: () => void }) {
@@ -60,18 +55,7 @@ export function LoginScreen({ onLoggedIn }: { onLoggedIn: () => void }) {
                 <Text c="dimmed">Use o mesmo usuário e senha do painel Buteco Agentes.</Text>
               </Stack>
 
-              {error && (
-                <Box
-                  role="alert"
-                  px={12}
-                  py={8}
-                  bg="var(--mantine-color-red-light)"
-                  c="var(--buteco-color-error-text)"
-                  style={{ borderRadius: 7 }}
-                >
-                  {loginErrorMessage(error.error, error.address)}
-                </Box>
-              )}
+              {error && <LoginErrorBlock error={error.error} address={error.address} />}
 
               {editingAddress ? (
                 <TextInput
@@ -129,41 +113,5 @@ export function LoginScreen({ onLoggedIn }: { onLoggedIn: () => void }) {
         </Paper>
       </Stack>
     </Stack>
-  )
-}
-
-/** Linha somente leitura dos acessos seguintes: ícone de servidor, endereço salvo e **Alterar**. */
-function ServiceRow(props: { address: string; warning: string | null; disabled: boolean; onChange: () => void }) {
-  return (
-    <Input.Wrapper label="Serviço" styles={{ label: FIELD_STYLES.label }}>
-      <Group
-        h={34}
-        px={10}
-        gap={8}
-        wrap="nowrap"
-        bg="var(--mantine-color-default-hover)"
-        style={{ border: '1px solid var(--mantine-color-default-border)', borderRadius: 7 }}
-      >
-        <IconServer size={16} color="var(--mantine-color-dimmed)" aria-hidden />
-        <Text flex={1} miw={0} truncate="end" style={MONO_12}>
-          {props.address}
-        </Text>
-        <Button
-          variant="transparent"
-          size="compact-sm"
-          px={0}
-          c="var(--mantine-color-anchor)"
-          disabled={props.disabled}
-          onClick={props.onChange}
-        >
-          Alterar
-        </Button>
-      </Group>
-      {props.warning && (
-        <Text mt={5} style={{ ...HINT, color: 'var(--buteco-color-warning-text)' }}>
-          {props.warning}
-        </Text>
-      )}
-    </Input.Wrapper>
   )
 }

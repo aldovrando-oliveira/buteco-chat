@@ -34,7 +34,7 @@ O app pede o endereço do serviço Buteco Agentes e o usuário e a senha do oper
 
 - O endereço aceita prefixo de caminho (`https://host/buteco`), mas não credenciais embutidas, query nem `#`.
 - Com `http://` fora do próprio computador (`localhost`, `127.x.x.x`, `[::1]`), a tela avisa que a senha será enviada sem criptografia, mas deixa entrar.
-- A sessão dura o que a plataforma definir (30 min por padrão) e não é renovada: depois disso, é preciso entrar de novo.
+- A sessão dura o que a plataforma definir (30 min por padrão) e não é renovada: depois disso, é preciso entrar de novo (veja "Quando a sessão expira").
 
 Entre aberturas, o app lembra **só o endereço do serviço**, e só depois de um login bem-sucedido. Usuário, senha e token não são guardados em lugar nenhum; o token fica na memória do processo main até sair ou fechar o app.
 
@@ -54,9 +54,28 @@ Depois do login, a tela de conversas lista os agentes da plataforma no seletor d
 - **Nova conversa** e a troca de agente começam uma conversa nova, sem `contextId`. Se a atual tiver mensagens, o app pede confirmação.
 
 **O que não é guardado:**
-- A conversa existe só na memória do app. Ela se perde ao começar outra, ao sair, ao fechar o app ou quando a sessão termina.
-- Se a plataforma recusar o token durante o uso, o app volta ao login com o aviso "A sessão terminou. Entre de novo para continuar.", sem retomar a resposta pendente.
-- O histórico local de conversas e a retomada depois de um novo login ainda não existem.
+- A conversa existe só na memória do app. Ela se perde ao começar outra, ao sair, ao fechar o app ou ao recarregar a janela.
+- O histórico local de conversas ainda não existe.
+
+### Quando a sessão expira
+
+Quando o tempo do rodapé chega a zero, ou quando a plataforma recusa o token durante o uso (por exemplo, depois de um reinício com outra chave de assinatura), o app **não sai da conversa**:
+- o rodapé mostra "Sessão expirada" e aparece um aviso acima do campo de mensagem com **Entrar novamente**;
+- o envio, **Reenviar**, **Continuar aguardando**, o seletor de agente e **Nova conversa** ficam bloqueados; **Copiar** e **Sair** continuam disponíveis;
+- **Entrar novamente** pede só a senha, com o mesmo serviço e o mesmo usuário. Para trocar de conta, use **Sair**.
+
+Depois do novo login, o app retoma de onde parou:
+- **resposta em andamento**: volta a acompanhar a mesma task, sem reenviar a mensagem (o agente não a processa duas vezes);
+- **mensagem recusada no envio**: a plataforma não a registrou, então ela é enviada uma única vez, na mesma conversa;
+- **lista de agentes recusada**: é carregada de novo.
+
+**Para testar com a plataforma local**, reduza a vida do token do operador ao subir o `apps/api` de `buteco-agents`, por exemplo para 2 min:
+
+```sh
+Auth__OperatorTokenLifetime=00:02:00 dotnet run --project apps/api/src/Buteco.Api
+```
+
+Para simular um token recusado com tempo restante, reinicie o `apps/api` com outro `Auth__TokenSigningKey`. Reiniciar sem trocar a chave não invalida o token.
 
 ## Arquitetura
 

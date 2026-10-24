@@ -120,7 +120,7 @@ describe('cores de erro e de aviso (login-operador, D12)', () => {
   it('definem os tons por esquema', () => {
     expect(resolve('var(--buteco-color-error-text)', 'light')).toBe('#b02a1f')
     expect(resolve('var(--buteco-color-error-text)', 'dark')).toBe('#f0766a')
-    expect(resolve('var(--buteco-color-warning-text)', 'light')).toBe('#9d6a13')
+    expect(resolve('var(--buteco-color-warning-text)', 'light')).toBe('#8a5a00')
     expect(resolve('var(--buteco-color-warning-text)', 'dark')).toBe('#e2a63f')
   })
 
@@ -151,6 +151,19 @@ describe('selo Ativo e balão do usuário (conversa-a2a, D19)', () => {
     ['dark', '--mantine-color-text', '--mantine-color-butecoBlue-light']
   ] as const)('no esquema %s, %s sobre %s tem ≥ 4,5:1', (scheme, text, background) => {
     const ratio = contrastRatio(resolve(`var(${text})`, scheme), resolve(`var(${background})`, scheme))
+
+    expect(ratio).toBeGreaterThanOrEqual(4.5)
+  })
+})
+
+describe('banner de sessão expirada (sessao-expirada, D11 #8)', () => {
+  it.each([
+    ['light', '--buteco-color-warning-text'],
+    ['dark', '--buteco-color-warning-text'],
+    ['light', '--mantine-color-text'],
+    ['dark', '--mantine-color-text']
+  ] as const)('no esquema %s, %s sobre --mantine-color-yellow-light tem ≥ 4,5:1', (scheme, text) => {
+    const ratio = contrastRatio(resolve(`var(${text})`, scheme), resolve('var(--mantine-color-yellow-light)', scheme))
 
     expect(ratio).toBeGreaterThanOrEqual(4.5)
   })

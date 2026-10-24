@@ -1,9 +1,12 @@
-import { notifications } from '@mantine/notifications'
-import { act, fireEvent, render, screen, within } from '@testing-library/react'
+import { MantineProvider } from '@mantine/core'
+import { act, fireEvent, render, renderHook, screen, within } from '@testing-library/react'
+import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { App, SESSION_ENDED_MESSAGE } from '../App'
-import { loggedIn, LOGGED_OUT } from '../auth/test-auth'
-import { ANTIGO, ATENDENTE, CONTEXT_ID, mockButeco, sent, task, TRADUTOR } from './test-chat'
+import type { ButecoApi } from '../../../shared/api'
+import { App } from '../App'
+import { loggedIn } from '../auth/test-auth'
+import { ANTIGO, ATENDENTE, CONTEXT_ID, mockButeco, sent, task, TASK_ID, TRADUTOR } from './test-chat'
+import { useConversation } from './use-conversation'
 
 let api: ReturnType<typeof mockButeco>
 
@@ -19,8 +22,6 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-  // A fila de notificações do Mantine é global: sem limpar, uma notificação passa para o teste seguinte.
-  act(() => notifications.clean())
   vi.useRealTimers()
   vi.restoreAllMocks()
 })
@@ -53,7 +54,7 @@ async function chooseAgent(name: string) {
 }
 
 function alertWith(text: string) {
-  return screen.getAllByRole('alert').find((element) => element.textContent?.includes(text))
+  return screen.queryAllByRole('alert').find((element) => element.textContent?.includes(text))
 }
 
 describe('barra lateral', () => {
@@ -120,17 +121,6 @@ describe('barra lateral', () => {
     expect(api.auth.logout).toHaveBeenCalledOnce()
     expect(screen.getByRole('heading', { name: 'Entrar' })).toBeInTheDocument()
     expect(api.chat.getTask).toHaveBeenCalledTimes(consultas)
-    expect(screen.queryByText(SESSION_ENDED_MESSAGE)).toBeNull()
-  })
-
-  it('tempo esgotado: consulta o main e volta ao login', async () => {
-    api.auth.status.mockResolvedValueOnce(loggedIn(1)).mockResolvedValue(LOGGED_OUT)
-    await renderScreen()
-
-    // Um tique por vez: dentro de um único act o React só aplica o estado no fim, e o contador andaria uma vez só.
-    for (let second = 0; second <= 60; second++) await advance(1000)
-
-    expect(screen.getByRole('heading', { name: 'Entrar' })).toBeInTheDocument()
   })
 })
 
@@ -185,20 +175,6 @@ describe('carregamento da lista de agentes', () => {
     expect(agentSelect()).toHaveValue('Atendente')
     expect(screen.getAllByRole('alert')).toHaveLength(1) // só o bloco da rejeitada
     expect(screen.queryByText('Não foi possível carregar os agentes.')).toBeNull()
-  })
-
-  it('recarga depois de REJECTED com unauthorized encerra a sessão', async () => {
-    api.chat.send.mockResolvedValue(sent('TASK_STATE_REJECTED'))
-    await renderScreen()
-    api.agents.list.mockResolvedValueOnce({ ok: false, error: { kind: 'unauthorized' } })
-
-    await sendMessage('oi')
-    await flush()
-    await advance(500)
-
-    expect(api.auth.logout).toHaveBeenCalledOnce()
-    expect(screen.getByRole('heading', { name: 'Entrar' })).toBeInTheDocument()
-    expect(screen.getByText(SESSION_ENDED_MESSAGE)).toBeInTheDocument()
   })
 })
 
@@ -431,22 +407,6 @@ describe('estados da task', () => {
 
     expect(api.chat.send).toHaveBeenCalledTimes(2)
     expect(api.chat.send).toHaveBeenLastCalledWith(ATENDENTE.id, 'oi', CONTEXT_ID)
-  })
-
-  it('Reenviar depois do prazo com a consulta prévia em unauthorized encerra a sessão sem reenviar', async () => {
-    await renderScreen()
-    await sendMessage('oi')
-    await advance(90_000)
-    api.chat.getTask.mockResolvedValue({ ok: false, error: { kind: 'unauthorized' } })
-
-    fireEvent.click(within(alertWith('O agente não respondeu a tempo.')!).getByRole('button', { name: 'Reenviar' }))
-    await flush()
-    await advance(500)
-
-    expect(api.chat.send).toHaveBeenCalledOnce()
-    expect(api.auth.logout).toHaveBeenCalledOnce()
-    expect(screen.getByRole('heading', { name: 'Entrar' })).toBeInTheDocument()
-    expect(screen.getByText(SESSION_ENDED_MESSAGE)).toBeInTheDocument()
   })
 
   it('falha ambígua no envio: não afirma que nada foi enviado', async () => {
@@ -686,40 +646,492 @@ describe('Nova conversa e troca de agente', () => {
   })
 })
 
-describe('sessão terminada', () => {
-  it('unauthorized no polling: logout, login e notificação, sem novas consultas', async () => {
-    api.chat.getTask.mockResolvedValue({ ok: false, error: { kind: 'unauthorized' } })
-    await renderScreen()
+describe('sessão expirada (sessao-expirada)', () => {
+  const UNAUTHORIZED = { ok: false as const, error: { kind: 'unauthorized' as const } }
+  const POLL_TEXT =
+    'A resposta em andamento continua sendo processada. Entre de novo para retomá-la — nada será reenviado.'
+  const SEND_TEXT = 'Sua mensagem ainda não foi enviada. Entre de novo para enviá-la — ela será enviada uma única vez.'
+  const IDLE_TEXT = 'Entre de novo para continuar.'
+  const POLL_SUBTITLE = 'A conversa e a resposta em andamento continuam onde estavam.'
+  const SEND_SUBTITLE = 'A conversa continua onde estava. A mensagem será enviada depois do login.'
 
+  type Login = ButecoApi['auth']['login']
+  const renewedLogin: Login = async () => ({
+    ok: true,
+    value: { expiresAt: new Date(Date.now() + 30 * 60_000).toISOString() }
+  })
+
+  beforeEach(() => {
+    api.auth.login.mockImplementation(renewedLogin)
+  })
+
+  const banner = () => alertWith('Sua sessão expirou.')
+  const dialog = () => screen.getByRole('dialog')
+  const passwordField = () => within(dialog()).getByLabelText('Senha')
+  const status = () => screen.getByRole('status')
+
+  async function openRelogin() {
+    fireEvent.click(within(banner()!).getByRole('button', { name: 'Entrar novamente' }))
+    await advance(300)
+  }
+
+  async function submitRelogin(password = 's3nha') {
+    fireEvent.change(passwordField(), { target: { value: password } })
+    fireEvent.click(within(dialog()).getByRole('button', { name: 'Entrar' }))
+    await flush()
+    await flush()
+  }
+
+  async function relogin(password = 's3nha') {
+    await openRelogin()
+    await submitRelogin(password)
+    await advance(300)
+  }
+
+  /** Avança um tique por vez: dentro de um único act, o React só aplicaria o contador uma vez. */
+  async function tick(seconds: number) {
+    for (let second = 0; second < seconds; second++) await advance(1000)
+  }
+
+  it('401 no GetTask: banner, pílula, rodapé e composer; novo login retoma o mesmo taskId sem chat.send', async () => {
+    await renderScreen()
     await sendMessage('oi')
     await advance(1000)
-    await advance(500)
+    api.chat.getTask.mockResolvedValueOnce(UNAUTHORIZED)
+    await advance(1000)
+    const consultas = api.chat.getTask.mock.calls.length
 
-    expect(api.auth.logout).toHaveBeenCalledOnce()
-    expect(screen.getByRole('heading', { name: 'Entrar' })).toBeInTheDocument()
-    expect(screen.getByText(SESSION_ENDED_MESSAGE)).toBeInTheDocument()
-    await advance(5000)
-    expect(api.chat.getTask).toHaveBeenCalledOnce()
+    expect(banner()).toHaveTextContent(POLL_TEXT)
+    expect(status()).toHaveTextContent('Aguardando novo login para retomar')
+    expect(status()).toHaveTextContent('task 1a2b3c4d · Working')
+    expect(status()).not.toHaveTextContent('Processando')
+    expect(screen.getByText('Sessão expirada')).toBeInTheDocument()
+    expect(screen.queryByText(/Sessão válida por mais/)).toBeNull()
+    expect(messageBox()).toBeDisabled()
+    expect(messageBox()).toHaveAttribute('placeholder', 'Entre novamente para continuar')
+    await advance(10_000)
+    expect(api.chat.getTask).toHaveBeenCalledTimes(consultas)
+    expect(api.auth.logout).not.toHaveBeenCalled()
+
+    await openRelogin()
+    expect(within(dialog()).getByText('Entrar novamente')).toBeInTheDocument()
+    expect(within(dialog()).getByText(POLL_SUBTITLE)).toBeInTheDocument()
+    expect(within(dialog()).getByText('http://localhost:5017')).toBeInTheDocument()
+    expect(within(dialog()).getByLabelText('Usuário')).toHaveValue('ana')
+    expect(within(dialog()).getByLabelText('Usuário')).toHaveAttribute('readonly')
+    expect(within(dialog()).queryByRole('button', { name: 'Alterar' })).toBeNull()
+    expect(passwordField()).toHaveValue('')
+    expect(passwordField()).toHaveAttribute('type', 'password')
+    expect(passwordField()).toHaveAttribute('autocomplete', 'current-password')
+    expect(passwordField()).toHaveFocus()
+    await submitRelogin('s3nha')
+    await advance(300)
+
+    expect(api.auth.login).toHaveBeenCalledWith('http://localhost:5017', 'ana', 's3nha')
+    expect(banner()).toBeUndefined()
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(screen.getByText('Sessão válida por mais 30 min')).toBeInTheDocument()
+    expect(status()).toHaveTextContent('Processando')
+    await advance(1000)
+    expect(api.chat.getTask).toHaveBeenCalledTimes(consultas + 1)
+    expect(api.chat.getTask).toHaveBeenLastCalledWith(ATENDENTE.id, TASK_ID)
+    expect(api.chat.send).toHaveBeenCalledOnce()
   })
 
-  it('unauthorized na lista de agentes: mesmo caminho', async () => {
-    api.agents.list.mockResolvedValue({ ok: false, error: { kind: 'unauthorized' } })
+  it('prazo novo na retomada: o tempo no modal não conta', async () => {
     await renderScreen()
-    await advance(500)
+    await sendMessage('oi')
+    await advance(80_000)
+    api.chat.getTask.mockResolvedValueOnce(UNAUTHORIZED)
+    await advance(1000)
+    await advance(5 * 60_000)
 
-    expect(api.auth.logout).toHaveBeenCalledOnce()
-    expect(screen.getByRole('heading', { name: 'Entrar' })).toBeInTheDocument()
-    expect(screen.getByText(SESSION_ENDED_MESSAGE)).toBeInTheDocument()
+    await relogin()
+    await advance(88_000)
+    expect(alertWith('O agente não respondeu a tempo.')).toBeUndefined()
+    expect(status()).toHaveTextContent('Processando')
+    await advance(3000)
+    expect(alertWith('O agente não respondeu a tempo.')).toBeDefined()
   })
 
-  it('unauthorized no envio: mesmo caminho', async () => {
-    api.chat.send.mockResolvedValue({ ok: false, error: { kind: 'unauthorized' } })
+  it('401 no SendMessage: envio retido e reenvio único com o mesmo texto e contextId', async () => {
+    api.chat.getTask.mockResolvedValue(task('TASK_STATE_COMPLETED', 'olá'))
     await renderScreen()
+    await sendMessage('oi')
+    await advance(1000)
+    api.chat.send.mockResolvedValueOnce(UNAUTHORIZED)
+
+    await sendMessage('tudo bem?')
+
+    expect(banner()).toHaveTextContent(SEND_TEXT)
+    expect(status()).toHaveTextContent('Aguardando novo login para enviar')
+    expect(status()).not.toHaveTextContent('task')
+    await openRelogin()
+    expect(within(dialog()).getByText(SEND_SUBTITLE)).toBeInTheDocument()
+    await submitRelogin()
+    await advance(1000)
+
+    expect(api.chat.send).toHaveBeenCalledTimes(3)
+    expect(api.chat.send).toHaveBeenLastCalledWith(ATENDENTE.id, 'tudo bem?', CONTEXT_ID)
+    expect(screen.getAllByTestId('user-message').filter((m) => m.textContent?.includes('tudo bem?'))).toHaveLength(1)
+  })
+
+  it('um segundo sucesso de login sem nova expiração não reenvia', async () => {
+    mockButeco()
+    const wrapper = ({ children }: { children: ReactNode }) => <MantineProvider>{children}</MantineProvider>
+    const { result } = renderHook(() => useConversation(), { wrapper })
+    await flush()
+    window.buteco.chat.send = vi.fn<ButecoApi['chat']['send']>(async () => sent()).mockResolvedValueOnce(UNAUTHORIZED)
+    act(() => result.current.send('oi'))
+    await flush()
+    expect(result.current.expired).toBe(true)
+
+    act(() => {
+      result.current.renew()
+      result.current.renew()
+    })
+    await flush()
+
+    expect(window.buteco.chat.send).toHaveBeenCalledTimes(2)
+  })
+
+  it('401 na recarga da lista: a lista anterior fica, e o novo login recarrega', async () => {
+    api.chat.send.mockResolvedValue(sent('TASK_STATE_REJECTED'))
+    await renderScreen()
+    api.agents.list.mockResolvedValueOnce(UNAUTHORIZED)
 
     await sendMessage('oi')
-    await advance(500)
+    await flush()
+
+    expect(agentSelect()).toHaveValue('Atendente')
+    expect(banner()).toHaveTextContent(IDLE_TEXT)
+    expect(api.auth.logout).not.toHaveBeenCalled()
+    await relogin()
+    expect(api.agents.list).toHaveBeenCalledTimes(3)
+  })
+
+  it('lista e task guardadas juntas: um login retoma as duas, cada uma uma vez', async () => {
+    api.chat.send.mockResolvedValueOnce(sent('TASK_STATE_REJECTED'))
+    await renderScreen()
+    let answerList!: (result: Awaited<ReturnType<ButecoApi['agents']['list']>>) => void
+    api.agents.list.mockImplementationOnce(() => new Promise((resolve) => (answerList = resolve)))
+    await sendMessage('oi')
+    await sendMessage('de novo')
+    await advance(1000)
+    const consultas = api.chat.getTask.mock.calls.length
+
+    await act(async () => answerList(UNAUTHORIZED))
+    await flush()
+    expect(banner()).toHaveTextContent(POLL_TEXT)
+    await relogin()
+    await advance(1000)
+
+    expect(api.agents.list).toHaveBeenCalledTimes(3)
+    expect(api.chat.getTask).toHaveBeenCalledTimes(consultas + 1)
+    expect(api.chat.send).toHaveBeenCalledTimes(2)
+  })
+
+  it('401 na primeira carga: só o banner; depois do login, a carga é refeita', async () => {
+    api.agents.list.mockResolvedValueOnce(UNAUTHORIZED)
+    await renderScreen()
+
+    expect(banner()).toHaveTextContent(IDLE_TEXT)
+    expect(screen.queryByText('Carregando agentes…')).toBeNull()
+    expect(screen.queryByText('Não foi possível carregar os agentes.')).toBeNull()
+    await openRelogin()
+    expect(within(dialog()).queryByText(/continua/)).toBeNull()
+    let answerList!: (result: Awaited<ReturnType<ButecoApi['agents']['list']>>) => void
+    api.agents.list.mockImplementationOnce(() => new Promise((resolve) => (answerList = resolve)))
+    await submitRelogin()
+
+    expect(screen.getByText('Carregando agentes…')).toBeInTheDocument()
+    await act(async () => answerList({ ok: true, value: [ATENDENTE] }))
+    await flush()
+    expect(screen.getByText('NOVA CONVERSA COM')).toBeInTheDocument()
+  })
+
+  it('contador chegando a zero com a conversa parada: estado expirado sem status() nem logout()', async () => {
+    api.auth.status.mockResolvedValue(loggedIn(1))
+    api.chat.getTask.mockResolvedValue(task('TASK_STATE_COMPLETED', 'olá'))
+    await renderScreen()
+    await sendMessage('oi')
+    await tick(61)
+
+    expect(banner()).toHaveTextContent(IDLE_TEXT)
+    expect(screen.getByText('Sessão expirada')).toBeInTheDocument()
+    expect(api.auth.status).toHaveBeenCalledOnce()
+    expect(api.auth.logout).not.toHaveBeenCalled()
+    await openRelogin()
+    expect(within(dialog()).queryByText(/continua/)).toBeNull()
+    await submitRelogin()
+    await advance(300)
+    expect(screen.getByText('Sessão válida por mais 30 min')).toBeInTheDocument()
+  })
+
+  it('contador chegando a zero com uma consulta em andamento: descarta a resposta e retoma o mesmo taskId', async () => {
+    api.auth.status.mockResolvedValue(loggedIn(1))
+    await renderScreen()
+    await sendMessage('oi')
+    await tick(55)
+    let answerTask!: (result: Awaited<ReturnType<ButecoApi['chat']['getTask']>>) => void
+    api.chat.getTask.mockImplementationOnce(() => new Promise((resolve) => (answerTask = resolve)))
+    await tick(6)
+    const consultas = api.chat.getTask.mock.calls.length
+
+    await act(async () => answerTask(task('TASK_STATE_WORKING')))
+    await advance(5000)
+    expect(api.chat.getTask).toHaveBeenCalledTimes(consultas)
+    expect(status()).toHaveTextContent('Aguardando novo login para retomar')
+
+    await relogin()
+    await advance(1000)
+    expect(api.chat.getTask).toHaveBeenCalledTimes(consultas + 1)
+    expect(api.chat.getTask).toHaveBeenLastCalledWith(ATENDENTE.id, TASK_ID)
+  })
+
+  it('contador chegando a zero com um envio em andamento que dá certo: a task espera o login', async () => {
+    api.auth.status.mockResolvedValue(loggedIn(1))
+    await renderScreen()
+    await tick(58)
+    let answerSend!: (result: Awaited<ReturnType<ButecoApi['chat']['send']>>) => void
+    api.chat.send.mockImplementationOnce(() => new Promise((resolve) => (answerSend = resolve)))
+    await sendMessage('oi')
+    await tick(3)
+
+    await act(async () => answerSend(sent()))
+    await advance(5000)
+    expect(api.chat.getTask).not.toHaveBeenCalled()
+    expect(status()).toHaveTextContent('Aguardando novo login para retomar')
+    expect(status()).toHaveTextContent('task 1a2b3c4d · Submitted')
+    expect(banner()).toHaveTextContent(POLL_TEXT)
+
+    await relogin()
+    await advance(1000)
+    expect(api.chat.getTask).toHaveBeenCalledWith(ATENDENTE.id, TASK_ID)
+    expect(api.chat.send).toHaveBeenCalledOnce()
+  })
+
+  it('401 no getTask prévio de Reenviar: volta ao prazo esgotado, sem reenvio nem retomada', async () => {
+    await renderScreen()
+    await sendMessage('oi')
+    await advance(90_000)
+    api.chat.getTask.mockResolvedValueOnce(UNAUTHORIZED)
+
+    fireEvent.click(within(alertWith('O agente não respondeu a tempo.')!).getByRole('button', { name: 'Reenviar' }))
+    await flush()
+
+    expect(alertWith('O agente não respondeu a tempo.')).toBeDefined()
+    expect(banner()).toHaveTextContent(IDLE_TEXT)
+    await relogin()
+    const consultas = api.chat.getTask.mock.calls.length
+    await advance(5000)
+    expect(api.chat.send).toHaveBeenCalledOnce()
+    expect(api.chat.getTask).toHaveBeenCalledTimes(consultas)
+    expect(alertWith('O agente não respondeu a tempo.')).toBeDefined()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Continuar aguardando' }))
+    await advance(1000)
+    expect(api.chat.getTask).toHaveBeenCalledTimes(consultas + 1)
+  })
+
+  describe('época da sessão: 401 de uma chamada iniciada antes do novo login (D7)', () => {
+    it('chat.send: não expira de novo; a mensagem vai uma vez, com o token novo, no mesmo contextId', async () => {
+      api.auth.status.mockResolvedValue(loggedIn(1))
+      await renderScreen()
+      await tick(58)
+      let answerSend!: (result: Awaited<ReturnType<ButecoApi['chat']['send']>>) => void
+      api.chat.send.mockImplementationOnce(() => new Promise((resolve) => (answerSend = resolve)))
+      await sendMessage('oi')
+      await tick(3)
+      expect(banner()).toBeDefined()
+      await relogin()
+
+      await act(async () => answerSend(UNAUTHORIZED))
+      await flush()
+
+      expect(banner()).toBeUndefined()
+      expect(screen.queryByRole('dialog')).toBeNull()
+      expect(api.chat.send).toHaveBeenCalledTimes(2)
+      expect(api.chat.send).toHaveBeenLastCalledWith(ATENDENTE.id, 'oi', null)
+      expect(screen.getAllByTestId('user-message')).toHaveLength(1)
+      expect(status()).toHaveTextContent('Processando')
+      await advance(1000)
+      expect(api.chat.getTask).toHaveBeenCalledWith(ATENDENTE.id, TASK_ID)
+    })
+
+    it('agents.list: não expira de novo; a lista é carregada de novo', async () => {
+      api.auth.status.mockResolvedValue(loggedIn(1))
+      await renderScreen()
+      await tick(58)
+      let answerList!: (result: Awaited<ReturnType<ButecoApi['agents']['list']>>) => void
+      api.agents.list.mockImplementationOnce(() => new Promise((resolve) => (answerList = resolve)))
+      fireEvent.click(screen.getByRole('button', { name: 'Nova conversa' }))
+      await flush()
+      await tick(3)
+      await relogin()
+      const cargas = api.agents.list.mock.calls.length
+
+      await act(async () => answerList(UNAUTHORIZED))
+      await flush()
+
+      expect(banner()).toBeUndefined()
+      expect(api.agents.list).toHaveBeenCalledTimes(cargas + 1)
+      expect(agentSelect()).toHaveValue('Atendente')
+    })
+
+    it('getTask prévio de Reenviar: o turno volta ao prazo esgotado, sem expirar', async () => {
+      api.auth.status.mockResolvedValue(loggedIn(2))
+      await renderScreen()
+      await sendMessage('oi')
+      await tick(91)
+      expect(alertWith('O agente não respondeu a tempo.')).toBeDefined()
+      let answerTask!: (result: Awaited<ReturnType<ButecoApi['chat']['getTask']>>) => void
+      api.chat.getTask.mockImplementationOnce(() => new Promise((resolve) => (answerTask = resolve)))
+      fireEvent.click(within(alertWith('O agente não respondeu a tempo.')!).getByRole('button', { name: 'Reenviar' }))
+      await flush()
+      await tick(30)
+      expect(banner()).toBeDefined()
+      await relogin()
+
+      await act(async () => answerTask(UNAUTHORIZED))
+      await flush()
+
+      expect(banner()).toBeUndefined()
+      expect(alertWith('O agente não respondeu a tempo.')).toBeDefined()
+      expect(api.chat.send).toHaveBeenCalledOnce()
+    })
+
+    it('getTask do poller: a resposta antiga é descartada pela geração do stop()', async () => {
+      api.auth.status.mockResolvedValue(loggedIn(1))
+      await renderScreen()
+      await sendMessage('oi')
+      await tick(55)
+      let answerTask!: (result: Awaited<ReturnType<ButecoApi['chat']['getTask']>>) => void
+      api.chat.getTask.mockImplementationOnce(() => new Promise((resolve) => (answerTask = resolve)))
+      await tick(6)
+      await relogin()
+
+      await act(async () => answerTask(UNAUTHORIZED))
+      await flush()
+      const consultas = api.chat.getTask.mock.calls.length
+      await advance(1000)
+
+      expect(banner()).toBeUndefined()
+      expect(status()).toHaveTextContent('Processando')
+      expect(api.chat.getTask).toHaveBeenCalledTimes(consultas + 1)
+    })
+  })
+
+  describe('modal', () => {
+    async function expireWithPendingTask() {
+      await renderScreen()
+      await sendMessage('oi')
+      api.chat.getTask.mockResolvedValueOnce(UNAUTHORIZED)
+      await advance(1000)
+      return api.chat.getTask.mock.calls.length
+    }
+
+    it('Cancelar fecha sem login; o banner e Sair continuam; reabrir mostra a senha vazia', async () => {
+      await expireWithPendingTask()
+      await openRelogin()
+      fireEvent.change(passwordField(), { target: { value: 'meio-digitada' } })
+
+      fireEvent.click(within(dialog()).getByRole('button', { name: 'Cancelar' }))
+      await advance(300)
+
+      expect(screen.queryByRole('dialog')).toBeNull()
+      expect(api.auth.login).not.toHaveBeenCalled()
+      expect(banner()).toBeDefined()
+      expect(screen.getByRole('button', { name: 'Sair' })).toBeEnabled()
+      await openRelogin()
+      expect(passwordField()).toHaveValue('')
+    })
+
+    it('senha errada: mensagem do login, senha limpa e modal aberto', async () => {
+      await expireWithPendingTask()
+      api.auth.login.mockResolvedValueOnce({ ok: false, error: { kind: 'invalid-credentials' } })
+      await openRelogin()
+      await submitRelogin('errada')
+
+      expect(within(dialog()).getByRole('alert')).toHaveTextContent('Usuário ou senha incorretos.')
+      expect(passwordField()).toHaveValue('')
+      expect(banner()).toBeDefined()
+    })
+
+    it.each([
+      [
+        { kind: 'unreachable', message: 'net::ERR_CONNECTION_REFUSED' } as const,
+        'Não foi possível conectar a http://localhost:5017. Confira o endereço e se o serviço está no ar.'
+      ],
+      [{ kind: 'http', status: 500 } as const, 'O serviço em http://localhost:5017 respondeu com erro 500. Confira o endereço.'],
+      [{ kind: 'bad-response' } as const, 'O serviço em http://localhost:5017 deu uma resposta inesperada. Confira o endereço.']
+    ])('%o: mensagem do login, senha mantida e a retomada guardada', async (error, message) => {
+      const consultas = await expireWithPendingTask()
+      api.auth.login.mockResolvedValueOnce({ ok: false, error })
+      await openRelogin()
+      await submitRelogin('s3nha')
+
+      expect(within(dialog()).getByRole('alert')).toHaveTextContent(message)
+      expect(passwordField()).toHaveValue('s3nha')
+      fireEvent.click(within(dialog()).getByRole('button', { name: 'Entrar' }))
+      await flush()
+      await flush()
+      await advance(1000)
+      expect(api.chat.getTask).toHaveBeenCalledTimes(consultas + 1)
+      expect(api.chat.getTask).toHaveBeenLastCalledWith(ATENDENTE.id, TASK_ID)
+    })
+
+    it('durante o login, Esc e Cancelar não fecham; um segundo envio não chama login de novo', async () => {
+      await expireWithPendingTask()
+      api.auth.login.mockImplementationOnce(() => new Promise(() => {}))
+      await openRelogin()
+      fireEvent.change(passwordField(), { target: { value: 's3nha' } })
+      fireEvent.click(within(dialog()).getByRole('button', { name: 'Entrar' }))
+      await flush()
+
+      fireEvent.submit(passwordField().closest('form')!)
+      fireEvent.keyDown(dialog(), { key: 'Escape' })
+      await advance(300)
+
+      expect(api.auth.login).toHaveBeenCalledOnce()
+      expect(screen.getByRole('dialog')).toBeInTheDocument()
+      expect(within(dialog()).getByRole('button', { name: 'Cancelar' })).toBeDisabled()
+    })
+  })
+
+  it('ações na sessão expirada: Reenviar, Continuar aguardando, seletor e Nova conversa bloqueados; Copiar livre', async () => {
+    api.auth.status.mockResolvedValue(loggedIn(2))
+    await renderScreen()
+    await sendMessage('oi')
+    await tick(121)
+
+    const timeout = alertWith('O agente não respondeu a tempo.')!
+    expect(within(timeout).getByRole('button', { name: 'Reenviar' })).toBeDisabled()
+    expect(within(timeout).getByRole('button', { name: 'Continuar aguardando' })).toBeDisabled()
+    expect(agentSelect()).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Nova conversa' })).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Copiar' }))
+    await flush()
+    expect(api.clipboard.writeText).toHaveBeenCalledWith(CONTEXT_ID)
+    expect(screen.getByRole('button', { name: 'Copiado' })).toBeInTheDocument()
+  })
+
+  it('Sair na sessão expirada: logout, login vazio e nada depois', async () => {
+    await renderScreen()
+    await sendMessage('oi')
+    api.chat.getTask.mockResolvedValueOnce(UNAUTHORIZED)
+    await advance(1000)
+    const consultas = api.chat.getTask.mock.calls.length
+
+    fireEvent.click(screen.getByRole('button', { name: 'Sair' }))
+    await flush()
+    await advance(5000)
 
     expect(api.auth.logout).toHaveBeenCalledOnce()
-    expect(screen.getByText(SESSION_ENDED_MESSAGE)).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Entrar' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Usuário')).toHaveValue('')
+    expect(screen.getByLabelText('Senha')).toHaveValue('')
+    expect(api.chat.getTask).toHaveBeenCalledTimes(consultas)
+    expect(api.chat.send).toHaveBeenCalledOnce()
   })
 })
