@@ -1,16 +1,13 @@
 /** Formatação dos textos da tela de conversas (requisitos 'Cabeçalho da conversa', 'Timeline' e 'Composer'). */
 
+import { dayMonth, daysAgo, formatTime } from '../format/dates'
+
 export const TITLE_LENGTH = 40
 
 /** Primeiros 40 caracteres da primeira mensagem, com espaços e quebras colapsados, e "…" se for mais longa. */
 export function conversationTitle(firstMessage: string): string {
   const flat = firstMessage.replace(/\s+/g, ' ').trim()
   return flat.length > TITLE_LENGTH ? `${flat.slice(0, TITLE_LENGTH)}…` : flat
-}
-
-/** 8 primeiros caracteres + "…" + 4 últimos; inteiro se tiver até 12. */
-export function abbreviateContextId(contextId: string): string {
-  return contextId.length <= 12 ? contextId : `${contextId.slice(0, 8)}…${contextId.slice(-4)}`
 }
 
 export function shortTaskId(taskId: string): string {
@@ -54,12 +51,6 @@ export function formatCount(n: number): string {
   return integer.format(n)
 }
 
-/** `HH:mm` no relógio local. */
-export function formatTime(ms: number): string {
-  const date = new Date(ms)
-  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
-}
-
 function startOfDay(ms: number): number {
   const date = new Date(ms)
   return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
@@ -79,6 +70,19 @@ export function dayLabel(ms: number, now: number): string {
   if (day === yesterday.getTime()) return 'Ontem'
   const date = new Date(ms)
   return `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`
+}
+
+/**
+ * Início da conversa no cabeçalho (barra-de-status-e-marca, D3), pelo dia de calendário local: "Iniciada hoje às
+ * 14:32", "Iniciada ontem às 09:05" ou "Iniciada em 20 out às 18:40" (com o ano quando é outro). Data futura conta como
+ * hoje, como na lista. Depois de ontem, sempre dia e mês: o dia da semana da lista fica ambíguo fora dos grupos.
+ */
+export function startedLabel(sentAt: number, now: number): string {
+  const days = daysAgo(sentAt, now)
+  const time = formatTime(sentAt)
+  if (days <= 0) return `Iniciada hoje às ${time}`
+  if (days === 1) return `Iniciada ontem às ${time}`
+  return `Iniciada em ${dayMonth(sentAt, now)} às ${time}`
 }
 
 /** Iniciais do avatar: primeira letra das duas primeiras partes do nome, ou as duas primeiras letras. */

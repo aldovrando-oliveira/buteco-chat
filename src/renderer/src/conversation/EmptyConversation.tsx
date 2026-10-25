@@ -13,7 +13,7 @@ export function CenteredCard({ children }: { children: React.ReactNode }) {
   )
 }
 
-/** Conversa vazia: "NOVA CONVERSA COM", nome, descrição, skills e a nota do contextId. */
+/** Conversa vazia: "NOVA CONVERSA COM", nome, descrição, skills e a nota de quando a conversa entra no histórico. */
 export function EmptyConversation({ agent }: { agent: AgentSummary }) {
   return (
     <CenteredCard>
@@ -33,7 +33,7 @@ export function EmptyConversation({ agent }: { agent: AgentSummary }) {
           </Group>
         )}
         <Text fz={12} c="dimmed">
-          O contextId desta conversa é atribuído no primeiro envio.
+          A conversa entra no histórico depois da primeira mensagem.
         </Text>
       </Stack>
     </CenteredCard>

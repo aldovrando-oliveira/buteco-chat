@@ -148,7 +148,7 @@ O polling MUST consultar a task com o agente da conversa a que ela pertence. Um 
 
 #### Scenario: Trocar de conversa durante o envio
 - **WHEN** o usuário envia a primeira mensagem da conversa A, abre a conversa B antes da resposta, e o envio devolve a task `9f8e7d6c-…` em `TASK_STATE_SUBMITTED` com o `contextId` `3a7d9f10-…`
-- **THEN** B continua sem esse `contextId`, nenhuma consulta é feita, e ao voltar para A o cabeçalho mostra `3a7d9f10…` e a próxima chamada é `chat.getTask` da task `9f8e7d6c-…` com o agente de A
+- **THEN** B continua sem esse `contextId` (o `title` do **Copiar ID** de B não é `3a7d9f10-…`), nenhuma consulta é feita, e ao voltar para A o botão **Copiar ID** do cabeçalho tem o `contextId` `3a7d9f10-…` no `title`, e a próxima chamada é `chat.getTask` da task `9f8e7d6c-…` com o agente de A
 
 #### Scenario: Envio rejeitado com a origem fechada
 - **WHEN** o envio da conversa A devolve `TASK_STATE_REJECTED` enquanto B está aberta

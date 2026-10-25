@@ -1,7 +1,7 @@
 import { Button, Select, Stack } from '@mantine/core'
 import { IconPlus } from '@tabler/icons-react'
 import type { AgentSummary } from '../../../shared/api'
-import { Brand } from '../auth/Brand'
+import { Brand } from '../components/Brand'
 import { SectionLabel } from '../components/SectionLabel'
 import { ConversationList } from '../history/ConversationList'
 import type { Conversation } from './model'
@@ -50,7 +50,7 @@ function AgentSelect(props: {
   )
 }
 
-/** Barra lateral: marca, AGENTE + seletor, Nova conversa, busca e lista de conversas, e rodapé de sessão. */
+/** Barra lateral: marca, AGENTE + seletor, Nova conversa, busca e lista de conversas, e rodapé com usuário e Sair. */
 export function Sidebar(props: {
   agents: AgentSummary[]
   agentsReady: boolean
@@ -64,7 +64,6 @@ export function Sidebar(props: {
   onSelectConversation: (conversationId: string) => void
   onDeleteConversation: (conversation: Conversation) => void
   onLogout: () => void
-  onExpired: () => void
 }) {
   const { agents, agentsReady, conversations, openConversation, session, expired } = props
   return (
@@ -98,7 +97,7 @@ export function Sidebar(props: {
         onSelect={props.onSelectConversation}
         onDelete={props.onDeleteConversation}
       />
-      <SessionFooter session={session} expired={expired} onLogout={props.onLogout} onExpired={props.onExpired} />
+      <SessionFooter username={session.username} onLogout={props.onLogout} />
     </aside>
   )
 }

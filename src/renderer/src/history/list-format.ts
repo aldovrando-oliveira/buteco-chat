@@ -1,4 +1,4 @@
-import { formatTime } from '../conversation/format'
+import { dayMonth, daysAgo, formatTime } from '../format/dates'
 
 /**
  * Grupos, horário do item e busca da lista de conversas (historico-conversas, D16). Abreviações por tabela fixa: a
@@ -17,17 +17,6 @@ export const GROUP_LABELS: Record<ListGroup, string> = {
 export const GROUP_ORDER: readonly ListGroup[] = ['today', 'yesterday', 'week', 'older']
 
 const WEEKDAYS = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb']
-const MONTHS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
-
-/** Dias de calendário local entre `ms` e `now` (positivo no passado). */
-function daysAgo(ms: number, now: number): number {
-  const day = new Date(ms)
-  const today = new Date(now)
-  const start = new Date(day.getFullYear(), day.getMonth(), day.getDate())
-  const end = new Date(today.getFullYear(), today.getMonth(), today.getDate())
-  // Arredonda: um dia com horário de verão tem 23 ou 25 h.
-  return Math.round((end.getTime() - start.getTime()) / 86_400_000)
-}
 
 /** Hoje (inclusive datas futuras), ontem, de 2 a 6 dias atrás, ou 7 dias ou mais. */
 export function groupOf(lastActivityAt: number, now: number): ListGroup {
@@ -43,10 +32,8 @@ export function itemTime(lastActivityAt: number, now: number): string {
   const group = groupOf(lastActivityAt, now)
   if (group === 'today') return formatTime(lastActivityAt)
   if (group === 'yesterday') return 'ontem'
-  const date = new Date(lastActivityAt)
-  if (group === 'week') return WEEKDAYS[date.getDay()]!
-  const dayMonth = `${String(date.getDate()).padStart(2, '0')} ${MONTHS[date.getMonth()]}`
-  return date.getFullYear() === new Date(now).getFullYear() ? dayMonth : `${dayMonth} ${date.getFullYear()}`
+  if (group === 'week') return WEEKDAYS[new Date(lastActivityAt).getDay()]!
+  return dayMonth(lastActivityAt, now)
 }
 
 function fold(text: string): string {

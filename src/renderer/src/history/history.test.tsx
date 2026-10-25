@@ -338,12 +338,29 @@ describe('várias conversas', () => {
     await act(async () => sending.resolve(sent('TASK_STATE_SUBMITTED', { taskId: OTHER_TASK, contextId: OTHER_CONTEXT })))
     await advance(3000)
     expect(api.chat.getTask).not.toHaveBeenCalled()
-    expect(within(main()).queryByText('7c6b5a49…4e5f')).toBeNull()
+    expect(within(main()).getByRole('button', { name: 'Copiar ID da conversa' })).not.toHaveAttribute('title', OTHER_CONTEXT)
 
     await select('nova pergunta')
-    expect(within(main()).getByText('7c6b5a49…4e5f')).toBeInTheDocument()
+    expect(within(main()).getByRole('button', { name: 'Copiar ID da conversa' })).toHaveAttribute('title', OTHER_CONTEXT)
     await advance(1000)
     expect(api.chat.getTask).toHaveBeenCalledWith(TRADUTOR.id, OTHER_TASK)
+  })
+
+  it('cabeçalho de conversas guardadas: ontem, outro dia do ano e outro ano (barra-de-status-e-marca, D3)', async () => {
+    seed(
+      stored('c1', 'De ontem', at(10, 23, 9, 5)),
+      stored('c2', 'Da semana', at(10, 20, 18, 40)),
+      stored('c3', 'Do ano passado', at(10, 15, 14, 32, 2025))
+    )
+    await renderScreen()
+    const header = () => screen.getByRole('banner')
+
+    await select('De ontem')
+    expect(within(header()).getByText('Iniciada ontem às 09:05')).toBeInTheDocument()
+    await select('Da semana')
+    expect(within(header()).getByText('Iniciada em 20 out às 18:40')).toBeInTheDocument()
+    await select('Do ano passado')
+    expect(within(header()).getByText('Iniciada em 15 out 2025 às 14:32')).toBeInTheDocument()
   })
 
   it('REJECTED com a origem fechada aparece ao voltar', async () => {

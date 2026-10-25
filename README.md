@@ -15,7 +15,9 @@ npm install
 
 O binário do Electron é baixado na primeira execução de `npm run dev` (ou de `npm run package`), e não durante o `npm install`.
 
-O npm avisa que `electron-winstaller` tem um script de instalação ainda não aprovado (`allowScripts`). Esse pacote é uma dependência do `electron-builder` usada só para gerar instaladores de Windows. Ele não roda nem é necessário neste projeto, e o script não deve ser aprovado.
+Em `npm run dev`, o console do DevTools pode mostrar um erro de CSP sobre `worker-src` ("Creating a worker from 'blob:…'"). Ele vem do cliente do Vite, que tenta reconectar o HMR depois de uma queda do servidor. Nesse caso, recarregue a janela manualmente (⌘R). O app empacotado não carrega o cliente do Vite e não é afetado.
+
+O npm avisa que `electron-winstaller` tem um script de instalação ainda não aprovado (`allowScripts`). Esse pacote é uma dependência do `electron-builder` usada só para gerar instaladores de Windows. Ele não roda nem é necessário neste projeto, e o script não deve ser aprovado. O mesmo vale para `fsevents`, dependência opcional do Vite no macOS: o npm o lista porque o pacote traz um `binding.gyp`, mas ele já vem com o binário pronto, e o script não deve ser aprovado.
 
 ## Scripts
 
@@ -27,6 +29,7 @@ O npm avisa que `electron-winstaller` tem um script de instalação ainda não a
 | `npm test` | Roda os testes do Vitest: projeto `main` (Node) e projeto `renderer` (jsdom + Testing Library). |
 | `npm run test:build` | Verifica os artefatos de `out/`: preload em CommonJS num arquivo só, nenhum asset como `data:`, CSP de produção no `index.html`. Rode depois de `npm run build`. |
 | `npm run package` | Faz o build e empacota o app com o `electron-builder` em `release/`. |
+| `npm run icons` | Regenera `build/icon.png` e `build/icon-mac.png` a partir da geometria do ícone do app (veja "Ícone do app"). |
 
 ## Entrar na plataforma
 
@@ -97,7 +100,9 @@ src/
   preload/   ponte mínima exposta ao renderer como window.buteco (contextBridge)
   renderer/  interface React + Mantine, carregada de file:// no app empacotado
   shared/    tipos e constantes usados pelo main e pelo renderer (contrato da API em api.ts)
-tooling/     plugin do Vite que injeta a Content-Security-Policy
+tooling/     plugin do Vite que injeta a Content-Security-Policy e gerador dos PNGs do ícone do app
+assets/      origem da marca: o app-icon.svg da plataforma, copiado sem edição (assets/brand/README.md)
+build/       recursos do electron-builder: os PNGs do ícone do app, gerados por npm run icons e versionados
 ```
 
 Regras que valem para todo o código:
@@ -120,6 +125,12 @@ Para ver os avisos e erros do renderer, como violações de CSP, abra o app pelo
 ```
 
 Uma linha como `error messaging the mach port for IMKCFRunLoopWakeUpReliable` vem do macOS (Input Method Kit), não do app, e pode ser ignorada.
+
+### Ícone do app
+
+O ícone vem do `app-icon.svg` oficial da plataforma, copiado **sem edição** para `assets/brand/` (origem, SHA-256 e a regra do manifesto C2PA em `assets/brand/README.md`). O app não importa código da plataforma. O que é desenhado sai da geometria em `src/shared/app-icon-geometry.ts`, que tem uma correção local na gravata. Dessa geometria saem o ícone dentro do app e os dois PNGs de `build/`: `icon.png` no quadro inteiro, para Windows e Linux, e `icon-mac.png` com a margem do grid do macOS, sem sombra. O `electron-builder` gera o `.icns` e o `.ico` a partir deles. Em `npm run dev`, a janela e o Dock usam os mesmos PNGs.
+
+Uma revisão da marca substitui `assets/brand/app-icon.svg` inteiro e atualiza o registro no README dele. Depois, revise a correção da gravata e rode `npm run icons`.
 
 ### macOS: app não assinado em outra máquina
 

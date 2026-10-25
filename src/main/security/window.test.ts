@@ -46,4 +46,22 @@ describe('createMainWindow', () => {
     expect(window.once).toHaveBeenCalledWith('ready-to-show', expect.any(Function))
     expect(window.webContents.on).toHaveBeenCalledWith('console-message', expect.any(Function))
   })
+
+  it('tem tamanho mínimo de 720×600 (barra-de-status-e-marca, D9)', () => {
+    createMainWindow('/app/out/preload/index.js')
+
+    expect(created.at(-1)!.options).toMatchObject({ minWidth: 720, minHeight: 600 })
+  })
+
+  it('sem ícone, não passa `icon` ao BrowserWindow', () => {
+    createMainWindow('/app/out/preload/index.js')
+
+    expect(created.at(-1)!.options).not.toHaveProperty('icon')
+  })
+
+  it('com ícone (dev), passa o caminho como `icon`', () => {
+    createMainWindow('/app/out/preload/index.js', { icon: '/app/build/icon.png' })
+
+    expect(created.at(-1)!.options).toMatchObject({ icon: '/app/build/icon.png' })
+  })
 })

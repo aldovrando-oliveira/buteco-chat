@@ -20,8 +20,47 @@ body {
  */
 .buteco-conversation {
   display: flex;
-  flex-direction: row;
+  flex-direction: column;
   height: 100vh;
+}
+
+/* Barra lateral e área principal, acima da barra de status (barra-de-status-e-marca, D1). */
+.buteco-workspace {
+  display: flex;
+  flex-direction: row;
+  flex: 1;
+  min-height: 0;
+}
+
+/* Barra de status no rodapé da janela, também na largura estreita (D1). */
+.buteco-statusbar {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  height: 26px;
+  padding: 0 12px;
+  background-color: var(--mantine-color-body);
+  border-top: 1px solid var(--mantine-color-default-border);
+  font-size: 11px;
+  color: var(--mantine-color-dimmed);
+}
+
+.buteco-statusbar-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Só o endereço trunca; o tempo de sessão não encolhe. */
+.buteco-statusbar-service {
+  min-width: 0;
+}
+
+.buteco-statusbar-session {
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .buteco-sidebar {
@@ -112,7 +151,7 @@ body {
 }
 
 @media (max-width: 859.98px) {
-  .buteco-conversation {
+  .buteco-workspace {
     flex-direction: column;
   }
 
@@ -122,10 +161,11 @@ body {
     border-bottom: 1px solid var(--mantine-color-default-border);
   }
 
-  /* A lista continua acessível na largura estreita, com rolagem própria (historico-conversas, D16 #5). */
+  /* A lista continua acessível na largura estreita, com rolagem própria (historico-conversas, D16 #5; 25vh desde
+   * barra-de-status-e-marca, D9). */
   .buteco-sidebar-history {
     flex: none;
-    max-height: 30vh;
+    max-height: 25vh;
   }
 }
 

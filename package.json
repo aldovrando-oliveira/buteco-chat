@@ -13,7 +13,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.node.json --composite false && tsc --noEmit -p tsconfig.web.json --composite false",
     "test": "vitest run --project main --project renderer",
     "test:build": "vitest run --project build",
-    "package": "npm run build && electron-builder"
+    "package": "npm run build && electron-builder",
+    "icons": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON tooling/app-icon.ts"
   },
   "dependencies": {
     "@fontsource/ibm-plex-mono": "^5.3.0",
@@ -27,6 +28,7 @@
     "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
+    "@resvg/resvg-js": "^2.6.2",
     "@testing-library/dom": "^10.4.2",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",
@@ -49,9 +51,11 @@
       "output": "release"
     },
     "asar": true,
+    "icon": "build/icon.png",
     "npmRebuild": false,
     "mac": {
       "identity": null,
+      "icon": "build/icon-mac.png",
       "target": "dir"
     },
     "publish": null,

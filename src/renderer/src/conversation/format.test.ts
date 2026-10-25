@@ -1,14 +1,13 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
-  abbreviateContextId,
   conversationTitle,
   dayLabel,
   durationSeconds,
   formatCount,
   formatSeconds,
-  formatTime,
   initials,
   shortTaskId,
+  startedLabel,
   stateLabel
 } from './format'
 
@@ -29,14 +28,35 @@ describe('conversationTitle', () => {
   })
 })
 
-describe('abbreviateContextId', () => {
-  it('8 primeiros + … + 4 últimos', () => {
-    expect(abbreviateContextId('3a7d9f10-1b2c-4d5e-8f90-0a1b2c3d4e5f')).toBe('3a7d9f10…4e5f')
+describe('startedLabel (barra-de-status-e-marca, D3)', () => {
+  const now = new Date(2026, 9, 24, 15, 0).getTime()
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
   })
 
-  it('até 12 caracteres fica inteiro', () => {
-    expect(abbreviateContextId('ctx-1')).toBe('ctx-1')
-    expect(abbreviateContextId('123456789012')).toBe('123456789012')
+  it('hoje, ontem, outro dia do ano e outro ano', () => {
+    expect(startedLabel(new Date(2026, 9, 24, 14, 32).getTime(), now)).toBe('Iniciada hoje às 14:32')
+    expect(startedLabel(new Date(2026, 9, 23, 9, 5).getTime(), now)).toBe('Iniciada ontem às 09:05')
+    expect(startedLabel(new Date(2026, 9, 20, 18, 40).getTime(), now)).toBe('Iniciada em 20 out às 18:40')
+    expect(startedLabel(new Date(2025, 9, 15, 14, 32).getTime(), now)).toBe('Iniciada em 15 out 2025 às 14:32')
+  })
+
+  it('de 2 a 6 dias atrás, dia e mês, não o dia da semana da lista', () => {
+    expect(startedLabel(new Date(2026, 9, 22, 8, 0).getTime(), now)).toBe('Iniciada em 22 out às 08:00')
+  })
+
+  it('data futura (relógio local atrasado) conta como hoje', () => {
+    expect(startedLabel(new Date(2026, 9, 25, 1, 0).getTime(), now)).toBe('Iniciada hoje às 01:00')
+  })
+
+  it('o dia de 23 h do horário de verão continua sendo "ontem"', () => {
+    // Em São Paulo, o horário de verão de 2018 começou em 04/11: a meia-noite pulou para 01:00, e do início de 04/11
+    // ao de 05/11 há 23 h.
+    vi.stubEnv('TZ', 'America/Sao_Paulo')
+    const sentAt = new Date(2018, 10, 4, 23, 30).getTime()
+
+    expect(startedLabel(sentAt, new Date(2018, 10, 5, 12, 0).getTime())).toBe('Iniciada ontem às 23:30')
   })
 })
 
@@ -74,10 +94,6 @@ describe('contador e horários', () => {
   it('separador de milhar pt-BR', () => {
     expect(formatCount(16_000)).toBe('16.000')
     expect(formatCount(14_400)).toBe('14.400')
-  })
-
-  it('HH:mm local', () => {
-    expect(formatTime(new Date(2026, 9, 24, 9, 5).getTime())).toBe('09:05')
   })
 
   it('rótulo do separador de dia', () => {

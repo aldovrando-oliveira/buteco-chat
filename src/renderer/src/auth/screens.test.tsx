@@ -1,7 +1,8 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ChatError } from '../../../shared/api'
 import { App } from '../App'
+import { expectBrand, expectNoImageNorDataUrl } from '../test/brand'
 import { SERVICE_URL_KEY } from './saved-service-url'
 import { loggedIn, LOGGED_OUT, mockAuth } from './test-auth'
 
@@ -53,6 +54,29 @@ describe('estrutura da tela de login', () => {
     expect(column.children[1]).toBe(card)
     expect(column.children[0]).toHaveTextContent('Buteco Chat')
     expect(column.children[0]!.querySelector('svg')).not.toBeNull()
+  })
+
+  it('a marca é o ícone do app de 32 px, nas duas telas, sem imagem nem data:', async () => {
+    await renderLogin()
+    expectBrand(document.body, 32)
+    expectNoImageNorDataUrl(document.body)
+    cleanup()
+
+    localStorage.setItem(SERVICE_URL_KEY, 'https://host/buteco')
+    await renderLogin()
+    expect(screen.getByText('https://host/buteco')).toBeInTheDocument()
+    expectBrand(document.body, 32)
+    expectNoImageNorDataUrl(document.body)
+  })
+
+  it('as telas de login não têm a barra de status', async () => {
+    await renderLogin()
+    expect(screen.queryByRole('contentinfo', { name: 'Barra de status' })).toBeNull()
+    cleanup()
+
+    localStorage.setItem(SERVICE_URL_KEY, 'https://host/buteco')
+    await renderLogin()
+    expect(screen.queryByRole('contentinfo', { name: 'Barra de status' })).toBeNull()
   })
 
   it('o cartão usa a superfície (Paper) sobre o fundo da página', async () => {

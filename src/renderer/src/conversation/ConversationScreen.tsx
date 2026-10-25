@@ -10,6 +10,7 @@ import { ReloginModal } from './ReloginModal'
 import { SessionExpiredBanner } from './SessionExpiredBanner'
 import type { SessionInfo } from './SessionFooter'
 import { Sidebar } from './Sidebar'
+import { StatusBar } from './StatusBar'
 import { Timeline } from './Timeline'
 import { useConversation, type AgentsState, type AgentStatus } from './use-conversation'
 
@@ -32,7 +33,10 @@ function placeholderFor(
   return `Mensagem para ${agentName}`
 }
 
-/** Tela de conversas (capacidade `conversa`): barra lateral e área principal com cabeçalho, timeline e composer. */
+/**
+ * Tela de conversas (capacidade `conversa`): barra lateral e área principal com cabeçalho, timeline e composer, e a
+ * barra de status no rodapé da janela.
+ */
 export function ConversationScreen(props: {
   session: SessionInfo
   onLogout: () => void
@@ -66,43 +70,46 @@ export function ConversationScreen(props: {
 
   return (
     <div className="buteco-conversation">
-      <Sidebar
-        agents={agentList}
-        agentsReady={agents.kind === 'ready'}
-        conversations={chat.conversations}
-        openConversation={conversation}
-        session={session}
-        expired={expired}
-        onSelectAgent={chat.selectAgent}
-        onNewConversation={chat.newConversation}
-        onSelectConversation={chat.select}
-        onDeleteConversation={setDeleting}
-        onLogout={logout}
-        onExpired={chat.expire}
-      />
-      <main className="buteco-main">
-        {conversation !== null && (
-          <ConversationHeader
-            title={conversation.title}
-            contextId={conversation.contextId}
-            agentName={conversation.agent.name}
-            agentStatus={agentStatus}
-          />
-        )}
-        <MainArea chat={chat} />
-        {/* Falha da primeira carga com uma conversa aberta: a conversa continua legível (historico-conversas, D12). */}
-        {conversation !== null && agents.kind === 'error' && (
-          <Box w="100%" maw={760} mx="auto" px={24} pt={4}>
-            <StateBlock title="Não foi possível carregar os agentes." actions={[{ label: 'Tentar de novo', onClick: chat.retryAgents }]} />
-          </Box>
-        )}
-        {expired && <SessionExpiredBanner expiredCase={expiredCase} onRelogin={() => setRelogin(true)} />}
-        <Composer
-          placeholder={placeholderFor(conversation?.agent.name ?? null, busy, agentStatus, agents, expired)}
-          blocked={blocked}
-          onSend={chat.send}
+      <div className="buteco-workspace">
+        <Sidebar
+          agents={agentList}
+          agentsReady={agents.kind === 'ready'}
+          conversations={chat.conversations}
+          openConversation={conversation}
+          session={session}
+          expired={expired}
+          onSelectAgent={chat.selectAgent}
+          onNewConversation={chat.newConversation}
+          onSelectConversation={chat.select}
+          onDeleteConversation={setDeleting}
+          onLogout={logout}
         />
-      </main>
+        <main className="buteco-main">
+          {conversation !== null && (
+            <ConversationHeader
+              title={conversation.title}
+              startedAt={conversation.turns[0]?.sentAt ?? null}
+              contextId={conversation.contextId}
+              agentName={conversation.agent.name}
+              agentStatus={agentStatus}
+            />
+          )}
+          <MainArea chat={chat} />
+          {/* Falha da primeira carga com uma conversa aberta: a conversa continua legível (historico-conversas, D12). */}
+          {conversation !== null && agents.kind === 'error' && (
+            <Box w="100%" maw={760} mx="auto" px={24} pt={4}>
+              <StateBlock title="Não foi possível carregar os agentes." actions={[{ label: 'Tentar de novo', onClick: chat.retryAgents }]} />
+            </Box>
+          )}
+          {expired && <SessionExpiredBanner expiredCase={expiredCase} onRelogin={() => setRelogin(true)} />}
+          <Composer
+            placeholder={placeholderFor(conversation?.agent.name ?? null, busy, agentStatus, agents, expired)}
+            blocked={blocked}
+            onSend={chat.send}
+          />
+        </main>
+      </div>
+      <StatusBar session={session} expired={expired} onExpired={chat.expire} />
       <ReloginModal
         opened={expired && relogin}
         session={session}

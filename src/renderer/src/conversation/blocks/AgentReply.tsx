@@ -1,7 +1,8 @@
 import { Box, Group, Stack, Text } from '@mantine/core'
 import { IconRobot } from '@tabler/icons-react'
 import type { ReactNode } from 'react'
-import { formatSeconds, formatTime, shortTaskId } from '../format'
+import { formatTime } from '../../format/dates'
+import { formatSeconds, shortTaskId } from '../format'
 import { Markdown } from '../Markdown'
 
 const AVATAR = {

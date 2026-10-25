@@ -1,5 +1,5 @@
 import { Box, Stack, Text } from '@mantine/core'
-import { formatTime } from '../format'
+import { formatTime } from '../../format/dates'
 
 /** Mensagem do usuário: à direita, balão de destaque claro, raio 11 11 4 11, quebras de linha preservadas. */
 export function UserMessage({ text, sentAt }: { text: string; sentAt: number }) {

@@ -6,10 +6,12 @@ type Listener = (...args: unknown[]) => void
 const state = {
   isPackaged: true,
   lock: true,
+  ready: false,
   calls: [] as string[],
   listeners: new Map<string, Listener>(),
   windows: [] as { isMinimized(): boolean; restore(): void; focus(): void }[],
   windowsCreated: 0,
+  windowOptions: [] as Record<string, unknown>[],
   handlers: [] as string[]
 }
 
@@ -23,6 +25,8 @@ vi.mock('electron', () => ({
       return '/dados/Buteco Chat'
     },
     setPath: (name: string, value: string) => state.calls.push(`setPath:${name}:${value}`),
+    getAppPath: () => '/projeto',
+    dock: { setIcon: (path: string) => state.calls.push(`dock.setIcon:${path}`) },
     requestSingleInstanceLock: () => {
       state.calls.push('requestSingleInstanceLock')
       return state.lock
@@ -32,12 +36,13 @@ vi.mock('electron', () => ({
     on: (name: string, listener: Listener) => state.listeners.set(name, listener),
     whenReady: () => {
       state.calls.push('whenReady')
-      return new Promise(() => {})
+      return state.ready ? Promise.resolve() : new Promise(() => {})
     }
   },
   BrowserWindow: Object.assign(
-    vi.fn(function (this: Record<string, unknown>) {
+    vi.fn(function (this: Record<string, unknown>, options: Record<string, unknown>) {
       state.windowsCreated++
+      state.windowOptions.push(options)
       this.once = vi.fn()
       this.loadFile = vi.fn(async () => {})
       this.loadURL = vi.fn(async () => {})
@@ -46,16 +51,27 @@ vi.mock('electron', () => ({
     { getAllWindows: () => state.windows, fromWebContents: () => ({}) }
   ),
   ipcMain: { handle: (channel: string) => state.handlers.push(channel) },
+  clipboard: { writeText: vi.fn() },
   net: { fetch: vi.fn() },
   nativeTheme: { shouldUseDarkColors: false },
   session: { defaultSession: { setPermissionRequestHandler: vi.fn(), setPermissionCheckHandler: vi.fn() } },
   shell: { openExternal: vi.fn() }
 }))
 
-async function start(options: { isPackaged: boolean; lock: boolean }) {
-  Object.assign(state, { ...options, calls: [], listeners: new Map(), windows: [], windowsCreated: 0, handlers: [] })
+async function start(options: { isPackaged: boolean; lock: boolean; ready?: boolean }) {
+  Object.assign(state, {
+    ready: false,
+    ...options,
+    calls: [],
+    listeners: new Map(),
+    windows: [],
+    windowsCreated: 0,
+    windowOptions: [],
+    handlers: []
+  })
   vi.resetModules()
   await import('./index')
+  await Promise.resolve()
 }
 
 describe('instância única (D15)', () => {
@@ -109,5 +125,23 @@ describe('instância única (D15)', () => {
       'setPath:userData:/dados/Buteco Chat (dev)',
       'requestSingleInstanceLock'
     ])
+  })
+})
+
+describe('ícone do app (barra-de-status-e-marca, D8)', () => {
+  it('dev: a janela recebe o PNG de quadro inteiro e o Dock, o do macOS', async () => {
+    await start({ isPackaged: false, lock: true, ready: true })
+
+    expect(state.calls).toContain('dock.setIcon:/projeto/build/icon-mac.png')
+    expect(state.windowOptions).toHaveLength(1)
+    expect(state.windowOptions[0]).toMatchObject({ icon: '/projeto/build/icon.png' })
+  })
+
+  it('pacote: sem ícone na janela e sem trocar o do Dock', async () => {
+    await start({ isPackaged: true, lock: true, ready: true })
+
+    expect(state.calls.some((call) => call.startsWith('dock.setIcon'))).toBe(false)
+    expect(state.windowOptions).toHaveLength(1)
+    expect(state.windowOptions[0]).not.toHaveProperty('icon')
   })
 })

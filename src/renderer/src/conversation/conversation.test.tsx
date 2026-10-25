@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ButecoApi } from '../../../shared/api'
 import { App } from '../App'
 import { loggedIn } from '../auth/test-auth'
+import { expectBrand, expectNoImageNorDataUrl } from '../test/brand'
 import { ANTIGO, ATENDENTE, CONTEXT_ID, mockButeco, sent, task, TASK_ID, TRADUTOR } from './test-chat'
 import { useConversation } from './use-conversation'
 
@@ -57,6 +58,56 @@ function alertWith(text: string) {
   return screen.queryAllByRole('alert').find((element) => element.textContent?.includes(text))
 }
 
+const statusBar = () => screen.getByRole('contentinfo', { name: 'Barra de status' })
+
+describe('barra de status (barra-de-status-e-marca, D1)', () => {
+  it('mostra o endereço completo, com title, e o tempo restante, sem role="status"', async () => {
+    await renderScreen()
+
+    const bar = statusBar()
+    expect(bar.tagName.toLowerCase()).toBe('footer')
+    expect(bar).not.toHaveAttribute('role')
+    expect(within(bar).getByText('http://localhost:5017')).toHaveAttribute('title', 'http://localhost:5017')
+    expect(within(bar).getByText('Sessão válida por mais 30 min')).toBeInTheDocument()
+    expect(bar.querySelector('.tabler-icon-server')).not.toBeNull()
+    expect(bar.querySelector('.tabler-icon-clock')).not.toBeNull()
+  })
+
+  it('endereço longo aparece inteiro no texto e no title', async () => {
+    const url = 'https://agentes.exemplo.com.br/plataforma/buteco'
+    api.auth.status.mockResolvedValue(loggedIn(30, url))
+    await renderScreen()
+
+    expect(within(statusBar()).getByText(url)).toHaveAttribute('title', url)
+  })
+
+  it('fica depois da barra lateral e da área principal, fora das duas', async () => {
+    await renderScreen()
+
+    const root = document.querySelector('.buteco-conversation')!
+    const workspace = root.querySelector('.buteco-workspace')!
+    expect([...root.children]).toEqual([workspace, statusBar()])
+    expect(workspace.querySelector('aside.buteco-sidebar')).not.toBeNull()
+    expect(workspace.querySelector('main')).not.toBeNull()
+  })
+
+  it('usa a superfície, o texto secundário e, expirada, o vermelho de texto (D10)', async () => {
+    api.auth.status.mockResolvedValue(loggedIn(1))
+    api.chat.getTask.mockResolvedValue(task('TASK_STATE_COMPLETED', 'olá'))
+    await renderScreen()
+
+    expect(statusBar()).toHaveClass('buteco-statusbar')
+    for (let second = 0; second < 61; second++) await advance(1000)
+
+    const expired = within(statusBar()).getByText('Sessão expirada')
+    expect(expired.getAttribute('style')).toContain('--mantine-color-red-text')
+    expect(expired.getAttribute('style')).toContain('font-weight: 500')
+    expect(statusBar().querySelector('.tabler-icon-lock')).not.toBeNull()
+    expect(statusBar().querySelector('.tabler-icon-clock')).toBeNull()
+    expect(within(statusBar()).getByText('http://localhost:5017')).toBeInTheDocument()
+  })
+})
+
 describe('barra lateral', () => {
   it('mostra, em ordem, marca, AGENTE, seletor, Nova conversa, busca, lista e rodapé', async () => {
     await renderScreen()
@@ -75,6 +126,13 @@ describe('barra lateral', () => {
     for (let i = 1; i < order.length; i++) {
       expect(order[i - 1]!.compareDocumentPosition(order[i]!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     }
+  })
+
+  it('a marca é o ícone do app de 24 px, e a tela não tem imagem nem data:', async () => {
+    await renderScreen()
+
+    expectBrand(document.querySelector('aside.buteco-sidebar') as HTMLElement, 24)
+    expectNoImageNorDataUrl(document.body)
   })
 
   it('largura, direção e área da lista vêm de classes, não de estilo inline (D20)', async () => {
@@ -99,14 +157,22 @@ describe('barra lateral', () => {
     expect(inactive).toHaveAttribute('data-combobox-disabled')
   })
 
-  it('rodapé com iniciais, usuário, host e minutos restantes', async () => {
+  it('rodapé só com iniciais, usuário e Sair, sem endereço nem tempo (barra-de-status-e-marca, D2)', async () => {
     await renderScreen()
 
     const footer = screen.getByRole('button', { name: 'Sair' }).parentElement!
     expect(within(footer).getByText('AN')).toBeInTheDocument()
     expect(within(footer).getByText('ana')).toBeInTheDocument()
-    expect(within(footer).getByText('@ localhost:5017')).toBeInTheDocument()
-    expect(within(footer).getByText('Sessão válida por mais 30 min')).toBeInTheDocument()
+    expect(footer).not.toHaveTextContent('localhost:5017')
+    expect(footer).not.toHaveTextContent('Sessão válida')
+  })
+
+  it('rodapé com nome longo: o nome inteiro, sem host ao lado', async () => {
+    api.auth.status.mockResolvedValue(loggedIn(30, 'https://agentes.exemplo.com.br/plataforma/buteco', 'joana_carvalho'))
+    await renderScreen()
+
+    const footer = screen.getByRole('button', { name: 'Sair' }).parentElement!
+    expect(footer).toHaveTextContent(/^JCjoana_carvalho$/)
   })
 
   it('Sair para o polling, chama logout e volta ao login', async () => {
@@ -189,15 +255,26 @@ describe('conversa vazia e cabeçalho', () => {
     expect(screen.getByText('Responde dúvidas')).toBeInTheDocument()
     expect(screen.getByText('Resumo')).toBeInTheDocument()
     expect(screen.getByText('Tradução')).toBeInTheDocument()
-    expect(screen.getByText('O contextId desta conversa é atribuído no primeiro envio.')).toBeInTheDocument()
+    expect(screen.getByText('A conversa entra no histórico depois da primeira mensagem.')).toBeInTheDocument()
   })
 
-  it('antes do primeiro envio: "Nova conversa", aguardando e sem Copiar', async () => {
+  it('nenhum texto visível da tela contém "contextId", vazia ou depois do envio', async () => {
+    await renderScreen()
+    expect(document.body.textContent).not.toContain('contextId')
+
+    await sendMessage('oi')
+    await advance(1000)
+    expect(document.body.textContent).not.toContain('contextId')
+  })
+
+  it('antes do primeiro envio: "Nova conversa", "Ainda sem mensagens" e sem Copiar ID', async () => {
     await renderScreen()
 
-    expect(screen.getByRole('heading', { name: 'Nova conversa' })).toBeInTheDocument()
-    expect(screen.getByText('— aguardando o primeiro envio')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Copiar' })).toBeNull()
+    const header = screen.getByRole('banner')
+    expect(within(header).getByRole('heading', { name: 'Nova conversa' })).toBeInTheDocument()
+    expect(within(header).getByText('Ainda sem mensagens')).toBeInTheDocument()
+    expect(within(header).queryByText('·')).toBeNull()
+    expect(within(header).queryByRole('button', { name: 'Copiar ID da conversa' })).toBeNull()
   })
 
   it('título com os 40 primeiros caracteres da primeira mensagem', async () => {
@@ -209,20 +286,58 @@ describe('conversa vazia e cabeçalho', () => {
     expect(screen.getByRole('heading', { name: `${'a'.repeat(20)} ${'b'.repeat(19)}…` })).toBeInTheDocument()
   })
 
-  it('contextId abreviado; Copiar envia o valor completo e mostra "Copiado" por 1,5 s', async () => {
+  it('depois do envio: "Iniciada hoje às", "·" e Copiar ID com o ID completo no title', async () => {
     await renderScreen()
     await sendMessage('oi')
 
-    expect(screen.getByText('3a7d9f10…4e5f')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Copiar' }))
+    const header = screen.getByRole('banner')
+    expect(within(header).getByText('Iniciada hoje às 15:00')).toBeInTheDocument()
+    expect(within(header).getByText('·')).toHaveAttribute('aria-hidden')
+    const copy = within(header).getByRole('button', { name: 'Copiar ID da conversa' })
+    expect(copy).toHaveTextContent('Copiar ID')
+    expect(copy).toHaveAttribute('title', CONTEXT_ID)
+  })
+
+  it('o cabeçalho não mostra "contextId" nem o ID como texto', async () => {
+    await renderScreen()
+    await sendMessage('oi')
+
+    const text = screen.getByRole('banner').textContent!
+    expect(text).not.toContain('contextId')
+    expect(text).not.toContain('3a7d9f10')
+    expect(text).not.toContain('4e5f')
+  })
+
+  it('primeiro envio sem contextId: "Iniciada…", sem "·" nem Copiar ID', async () => {
+    api.chat.send.mockResolvedValueOnce({ ok: false, error: { kind: 'unreachable', message: 'timeout' } })
+    await renderScreen()
+    await sendMessage('oi')
+
+    const header = screen.getByRole('banner')
+    expect(within(header).getByText('Iniciada hoje às 15:00')).toBeInTheDocument()
+    expect(within(header).queryByText('·')).toBeNull()
+    expect(within(header).queryByRole('button', { name: 'Copiar ID da conversa' })).toBeNull()
+  })
+
+  it('Copiar ID envia o valor completo, mostra "Copiado" por 1,5 s e anuncia "ID copiado"', async () => {
+    await renderScreen()
+    await sendMessage('oi')
+    const copy = screen.getByRole('button', { name: 'Copiar ID da conversa' })
+    const live = screen.getByRole('banner').querySelector('[aria-live="polite"]')!
+    expect(live).toBeEmptyDOMElement()
+
+    fireEvent.click(copy)
     await flush()
 
     expect(api.clipboard.writeText).toHaveBeenCalledWith(CONTEXT_ID)
-    expect(screen.getByRole('button', { name: 'Copiado' })).toBeInTheDocument()
+    expect(copy).toHaveTextContent('Copiado')
+    expect(copy).toHaveAccessibleName('Copiar ID da conversa')
+    expect(live).toHaveTextContent('ID copiado')
     await advance(1499)
-    expect(screen.getByRole('button', { name: 'Copiado' })).toBeInTheDocument()
+    expect(copy).toHaveTextContent('Copiado')
     await advance(1)
-    expect(screen.getByRole('button', { name: 'Copiar' })).toBeInTheDocument()
+    expect(copy).toHaveTextContent('Copiar ID')
+    expect(live).toBeEmptyDOMElement()
   })
 
   it('selo do agente e selo Ativo', async () => {
@@ -696,8 +811,8 @@ describe('sessão expirada (sessao-expirada)', () => {
     expect(status()).toHaveTextContent('Aguardando novo login para retomar')
     expect(status()).toHaveTextContent('task 1a2b3c4d · Working')
     expect(status()).not.toHaveTextContent('Processando')
-    expect(screen.getByText('Sessão expirada')).toBeInTheDocument()
-    expect(screen.queryByText(/Sessão válida por mais/)).toBeNull()
+    expect(within(statusBar()).getByText('Sessão expirada')).toBeInTheDocument()
+    expect(within(statusBar()).queryByText(/Sessão válida por mais/)).toBeNull()
     expect(messageBox()).toBeDisabled()
     expect(messageBox()).toHaveAttribute('placeholder', 'Entre novamente para continuar')
     await advance(10_000)
@@ -721,7 +836,7 @@ describe('sessão expirada (sessao-expirada)', () => {
     expect(api.auth.login).toHaveBeenCalledWith('http://localhost:5017', 'ana', 's3nha')
     expect(banner()).toBeUndefined()
     expect(screen.queryByRole('dialog')).toBeNull()
-    expect(screen.getByText('Sessão válida por mais 30 min')).toBeInTheDocument()
+    expect(within(statusBar()).getByText('Sessão válida por mais 30 min')).toBeInTheDocument()
     expect(status()).toHaveTextContent('Processando')
     await advance(1000)
     expect(api.chat.getTask).toHaveBeenCalledTimes(consultas + 1)
@@ -849,14 +964,14 @@ describe('sessão expirada (sessao-expirada)', () => {
     await tick(61)
 
     expect(banner()).toHaveTextContent(IDLE_TEXT)
-    expect(screen.getByText('Sessão expirada')).toBeInTheDocument()
+    expect(within(statusBar()).getByText('Sessão expirada')).toBeInTheDocument()
     expect(api.auth.status).toHaveBeenCalledOnce()
     expect(api.auth.logout).not.toHaveBeenCalled()
     await openRelogin()
     expect(within(dialog()).queryByText(/continua/)).toBeNull()
     await submitRelogin()
     await advance(300)
-    expect(screen.getByText('Sessão válida por mais 30 min')).toBeInTheDocument()
+    expect(within(statusBar()).getByText('Sessão válida por mais 30 min')).toBeInTheDocument()
   })
 
   it('contador chegando a zero com uma consulta em andamento: descarta a resposta e retoma o mesmo taskId', async () => {
@@ -1090,7 +1205,7 @@ describe('sessão expirada (sessao-expirada)', () => {
     })
   })
 
-  it('ações na sessão expirada: Reenviar, Continuar aguardando, seletor e Nova conversa bloqueados; Copiar livre', async () => {
+  it('ações na sessão expirada: Reenviar, Continuar aguardando, seletor e Nova conversa bloqueados; Copiar ID livre', async () => {
     api.auth.status.mockResolvedValue(loggedIn(2))
     await renderScreen()
     await sendMessage('oi')
@@ -1101,10 +1216,11 @@ describe('sessão expirada (sessao-expirada)', () => {
     expect(within(timeout).getByRole('button', { name: 'Continuar aguardando' })).toBeDisabled()
     expect(agentSelect()).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Nova conversa' })).toBeDisabled()
-    fireEvent.click(screen.getByRole('button', { name: 'Copiar' }))
+    const copy = screen.getByRole('button', { name: 'Copiar ID da conversa' })
+    fireEvent.click(copy)
     await flush()
     expect(api.clipboard.writeText).toHaveBeenCalledWith(CONTEXT_ID)
-    expect(screen.getByRole('button', { name: 'Copiado' })).toBeInTheDocument()
+    expect(copy).toHaveTextContent('Copiado')
   })
 
   it('Sair na sessão expirada: logout, login vazio e nada depois', async () => {

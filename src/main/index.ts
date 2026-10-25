@@ -25,6 +25,10 @@ function startPrimaryInstance(): void {
   const runtime = resolveRuntime(app.isPackaged, process.env['ELECTRON_RENDERER_URL'])
   const indexHtmlPath = join(__dirname, '../renderer/index.html')
   const preloadPath = join(__dirname, '../preload/index.js')
+  // Em dev, a janela e o Dock usam os PNGs gerados; empacotado, o ícone vem do pacote (barra-de-status-e-marca, D8).
+  const devIcons = app.isPackaged
+    ? null
+    : { window: join(app.getAppPath(), 'build/icon.png'), dock: join(app.getAppPath(), 'build/icon-mac.png') }
 
   setTrustedRenderer(rendererLocation(runtime, indexHtmlPath))
 
@@ -38,7 +42,7 @@ function startPrimaryInstance(): void {
   })
 
   function openMainWindow(): void {
-    const window = createMainWindow(preloadPath)
+    const window = createMainWindow(preloadPath, devIcons === null ? {} : { icon: devIcons.window })
     if (runtime.kind === 'dev-server') void window.loadURL(runtime.url)
     else void window.loadFile(indexHtmlPath)
   }
@@ -64,6 +68,7 @@ function startPrimaryInstance(): void {
       })
     )
     registerClipboardHandlers(clipboard)
+    if (devIcons !== null) app.dock?.setIcon(devIcons.dock)
     openMainWindow()
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) openMainWindow()
