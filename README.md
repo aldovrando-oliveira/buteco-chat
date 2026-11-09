@@ -17,7 +17,7 @@ O binário do Electron é baixado na primeira execução de `npm run dev` (ou de
 
 Em `npm run dev`, o console do DevTools pode mostrar um erro de CSP sobre `worker-src` ("Creating a worker from 'blob:…'"). Ele vem do cliente do Vite, que tenta reconectar o HMR depois de uma queda do servidor. Nesse caso, recarregue a janela manualmente (⌘R). O app empacotado não carrega o cliente do Vite e não é afetado.
 
-O npm avisa que `electron-winstaller` tem um script de instalação ainda não aprovado (`allowScripts`). Esse pacote é uma dependência do `electron-builder` usada só para gerar instaladores de Windows. Ele não roda nem é necessário neste projeto, e o script não deve ser aprovado. O mesmo vale para `fsevents`, dependência opcional do Vite no macOS: o npm o lista porque o pacote traz um `binding.gyp`, mas ele já vem com o binário pronto, e o script não deve ser aprovado.
+O npm avisa que `electron-winstaller` tem um script de instalação ainda não aprovado (`allowScripts`). Esse pacote é uma dependência do `electron-builder` usada só para gerar instaladores de Windows. Ele não roda nem é necessário neste projeto, e o script não deve ser aprovado. O mesmo vale para `fsevents`, dependência opcional do Vite que só é instalada no macOS (o aviso dele só aparece lá): o npm o lista porque o pacote traz um `binding.gyp`, mas ele já vem com o binário pronto, e o script não deve ser aprovado.
 
 ## Scripts
 
@@ -28,8 +28,8 @@ O npm avisa que `electron-winstaller` tem um script de instalação ainda não a
 | `npm run typecheck` | Verifica os tipos (TypeScript estrito) do main, do preload, do renderer e de `src/shared`. |
 | `npm test` | Roda os testes do Vitest: projeto `main` (Node) e projeto `renderer` (jsdom + Testing Library). |
 | `npm run test:build` | Verifica os artefatos de `out/`: preload em CommonJS num arquivo só, nenhum asset como `data:`, CSP de produção no `index.html`. Rode depois de `npm run build`. |
-| `npm run package` | Faz o build e empacota o app com o `electron-builder` em `release/`. |
-| `npm run icons` | Regenera `build/icon.png` e `build/icon-mac.png` a partir da geometria do ícone do app (veja "Ícone do app"). |
+| `npm run package` | Faz o build e empacota o app com o `electron-builder` em `release/`, para o sistema local (veja "Empacotamento"). |
+| `npm run icons` | Regenera `build/icon.png`, `build/icon-mac.png` e `build/icons/` a partir da geometria do ícone do app (veja "Ícone do app"). |
 
 ## Entrar na plataforma
 
@@ -41,7 +41,7 @@ O app pede o endereço do serviço Buteco Agentes e o usuário e a senha do oper
 
 Entre aberturas, o app lembra **só o endereço do serviço**, e só depois de um login bem-sucedido. Usuário, senha e token não são guardados em lugar nenhum; o token fica na memória do processo main até sair ou fechar o app.
 
-O app roda uma instância por vez: abrir de novo traz a janela aberta para a frente. O `npm run dev` usa uma pasta de dados própria (`Buteco Chat (dev)`, em `~/Library/Application Support/` no macOS), separada da do app empacotado, então os dois podem ficar abertos juntos e lembram endereços diferentes.
+O app roda uma instância por vez: abrir de novo traz a janela aberta para a frente. O `npm run dev` usa uma pasta de dados própria, `Buteco Chat (dev)`, separada da do app empacotado (veja "Pasta de dados"), então os dois podem ficar abertos juntos e lembram endereços diferentes.
 
 ## Conversar com um agente
 
@@ -66,11 +66,11 @@ Cada conversa é guardada neste computador assim que a primeira mensagem é envi
 - **Excluir.** A lixeira ao lado de cada conversa pede confirmação e apaga a conversa só deste computador. Se houver uma resposta em andamento, ela deixa de ser acompanhada. O contexto guardado na plataforma não é apagado, e não há como desfazer. Com a sessão expirada, a exclusão fica bloqueada.
 - **Agente indisponível.** Se o agente de uma conversa foi desativado ou removido da plataforma, a conversa abre normalmente para leitura, e o seletor mostra o agente como "(inativo)". Para continuar, comece uma nova conversa com outro agente.
 
-**Onde fica e o que contém.** O histórico fica no `Local Storage` da pasta de dados do app (`~/Library/Application Support/Buteco Chat/Local Storage/` no macOS; em dev, `Buteco Chat (dev)`), na chave `buteco-chat:sessions:<endereço do serviço>`. É **texto puro, sem criptografia**: qualquer pessoa com acesso à sua conta no computador pode ler as mensagens e as respostas. Senha e token nunca entram nele.
+**Onde fica e o que contém.** O histórico fica no `Local Storage` da pasta de dados do app (o caminho de cada sistema está em "Pasta de dados", na seção "Empacotamento"), na chave `buteco-chat:sessions:<endereço do serviço>`. É **texto puro, sem criptografia**: qualquer pessoa com acesso à sua conta no computador pode ler as mensagens e as respostas. Senha e token nunca entram nele.
 
 Se o conteúdo gravado estiver corrompido, o app começa com a lista vazia e guarda uma cópia do original em `buteco-chat:sessions-corrupt:<endereço>`. Se ele tiver sido gravado por uma versão mais nova do app, nada é sobrescrito: as conversas dessa sessão ficam só na memória.
 
-Para apagar todo o histórico, feche o app e remova a pasta `Local Storage` da pasta de dados. Isso também apaga o endereço de serviço lembrado.
+Para apagar todo o histórico, feche o app e remova a pasta `Local Storage` da pasta de dados; os comandos de cada sistema estão em "Pasta de dados". Isso também apaga o endereço de serviço lembrado.
 
 ### Quando a sessão expira
 
@@ -102,7 +102,7 @@ src/
   shared/    tipos e constantes usados pelo main e pelo renderer (contrato da API em api.ts)
 tooling/     plugin do Vite que injeta a Content-Security-Policy e gerador dos PNGs do ícone do app
 assets/      origem da marca: o app-icon.svg da plataforma, copiado sem edição (assets/brand/README.md)
-build/       recursos do electron-builder: os PNGs do ícone do app, gerados por npm run icons e versionados
+build/       recursos do electron-builder: os PNGs do ícone do app (icons/ para o Linux), gerados por npm run icons e versionados
 ```
 
 Regras que valem para todo o código:
@@ -116,26 +116,102 @@ As decisões e os motivos estão em `openspec/changes/` (ou, depois de arquivada
 
 ## Empacotamento
 
-`npm run package` gera o app só para o sistema operacional e a arquitetura da máquina em que roda, sem assinatura de desenvolvedor, sem notarização e sem atualização automática. No macOS, o resultado fica em `release/mac/Buteco Chat.app` (ou `release/mac-arm64/` em Macs Apple Silicon).
+`npm run package` gera o app para o sistema operacional e a arquitetura da máquina em que roda, e precisa ser executado no próprio sistema: o pacote do Linux é gerado no Linux, o do Windows no Windows e o do macOS no macOS. O app não tem assinatura de desenvolvedor, notarização nem atualização automática. O resultado fica em `release/`.
 
-Para ver os avisos e erros do renderer, como violações de CSP, abra o app pelo terminal:
+Para ver os avisos e erros do renderer, como violações de CSP, abra o app pelo terminal, com o comando de cada sistema abaixo.
+
+### macOS
+
+- **Pré-requisitos:** os gerais (Node.js e npm).
+- **Resultado:** `release/mac/Buteco Chat.app`, ou `release/mac-arm64/` em Macs Apple Silicon.
+- **Pelo terminal:**
+
+  ```sh
+  "release/mac/Buteco Chat.app/Contents/MacOS/Buteco Chat"
+  ```
+
+  Uma linha como `error messaging the mach port for IMKCFRunLoopWakeUpReliable` vem do macOS (Input Method Kit), não do app, e pode ser ignorada.
+- **App não assinado em outra máquina:** ao copiar o `.app` para outro Mac (por download, AirDrop ou zip), o macOS marca o arquivo como em quarentena e se recusa a abri-lo, dizendo que ele "está danificado". Como o app não é assinado, remova a quarentena antes de abrir:
+
+  ```sh
+  xattr -cr "/caminho/para/Buteco Chat.app"
+  ```
+
+### Linux (Ubuntu)
+
+> **Não verificada:** esta seção ainda não foi conferida num Ubuntu. O `deb` só foi gerado a partir de um Mac, para conferir a estrutura do pacote (`control`, `.desktop`, ícones e perfil do AppArmor); a instalação e a abertura do app não foram testadas.
+
+- **Pré-requisitos:** `git`, npm e Node.js 22.12 ou superior, instalado pelo [nvm](https://github.com/nvm-sh/nvm) ou pelo repositório da NodeSource. O `nodejs` do `apt` é antigo demais (o Ubuntu 24.04 traz a linha 18). Nenhum pacote de compilação é necessário.
+- **Resultado:** o pacote `release/buteco-chat_0.1.0_amd64.deb` (`arm64` no lugar de `amd64` em máquinas ARM).
+- **Instalar, atualizar e remover:**
+
+  ```sh
+  sudo apt install ./release/buteco-chat_*.deb   # instala, ou atualiza por cima de uma versão anterior
+  sudo apt remove buteco-chat
+  ```
+
+- **Abrir:** pelo lançador de aplicativos (no Ubuntu, em "Mostrar aplicativos", buscando "Buteco") ou, para ver os avisos, pelo terminal:
+
+  ```sh
+  buteco-chat
+  ```
+
+**Por que um instalador.** No Ubuntu 24.04 ou mais novo, o sandbox do Chromium só funciona com um perfil do AppArmor para o executável, e o `deb` instala esse perfil em `/etc/apparmor.d/buteco-chat`. Ele também instala o `.desktop` e os ícones que fazem o painel mostrar o ícone do app no Wayland. Não abra o app com `--no-sandbox`: isso desliga o isolamento do Chromium em todos os processos, inclusive no que mostra as respostas dos agentes.
+
+A pasta `release/linux-unpacked/`, gerada no caminho, não serve para abrir o app no Ubuntu 24.04 ou mais novo: sem o perfil do AppArmor, ele aborta com um erro do `chrome-sandbox`.
+
+Em `npm run dev` numa sessão Wayland, o painel mostra um ícone genérico, porque não há `.desktop` instalado para a janela de desenvolvimento. Numa sessão X11, o ícone aparece.
+
+### Windows
+
+> **Não verificada:** esta seção ainda não foi conferida num Windows. O pacote só foi gerado a partir de um Mac, para conferir a estrutura e o ícone do `.exe`.
+
+- **Pré-requisitos:** os gerais (Node.js e npm).
+- **Resultado:** `release\win-unpacked\Buteco Chat.exe` (ou `release\win-arm64-unpacked\` em máquinas ARM), uma pasta que se abre direto, sem instalar.
+- **Pelo terminal** (PowerShell):
+
+  ```powershell
+  & "release\win-unpacked\Buteco Chat.exe"
+  ```
+
+- **App não assinado:** o SmartScreen só avisa quando o `.exe` tem *Mark-of-the-Web*, ou seja, quando chegou por download ou por um zip baixado e extraído pelo Explorer. Gerado na própria máquina, ele abre sem aviso. Se aparecer "O Windows protegeu o computador", clique em **Mais informações** e depois em **Executar assim mesmo**, ou remova a marca antes de abrir, no PowerShell:
+
+  ```powershell
+  Get-ChildItem -Recurse "C:\caminho\para\win-unpacked" | Unblock-File
+  ```
+
+### Pasta de dados
+
+O app guarda seus dados (o endereço de serviço lembrado e o histórico, em `Local Storage/`) numa pasta do usuário, a do `app.getPath('userData')` do Electron. O `npm run dev` usa uma pasta própria, com ` (dev)` no nome.
+
+| Sistema | App empacotado | `npm run dev` |
+| --- | --- | --- |
+| macOS | `~/Library/Application Support/Buteco Chat` | `~/Library/Application Support/Buteco Chat (dev)` |
+| Linux | `~/.config/Buteco Chat` (ou `$XDG_CONFIG_HOME/Buteco Chat`) | `~/.config/Buteco Chat (dev)` |
+| Windows | `%APPDATA%\Buteco Chat` | `%APPDATA%\Buteco Chat (dev)` |
+
+O nome tem espaço: no terminal, use o caminho entre aspas, como em `ls ~/.config/"Buteco Chat"`.
+
+Para apagar o histórico, feche o app e remova a pasta `Local Storage` de dentro da pasta de dados. Isso também apaga o endereço de serviço lembrado:
 
 ```sh
-"release/mac/Buteco Chat.app/Contents/MacOS/Buteco Chat"
+rm -rf ~/Library/"Application Support/Buteco Chat/Local Storage"   # macOS
+rm -rf ~/.config/"Buteco Chat/Local Storage"                        # Linux
 ```
 
-Uma linha como `error messaging the mach port for IMKCFRunLoopWakeUpReliable` vem do macOS (Input Method Kit), não do app, e pode ser ignorada.
+```powershell
+Remove-Item -Recurse "$env:APPDATA\Buteco Chat\Local Storage"     # Windows
+```
+
+Desinstalar o app não apaga essa pasta: no Linux, nem `sudo apt remove buteco-chat` nem `apt purge` mexem em `~/.config/Buteco Chat`. Para remover tudo, apague a pasta de dados inteira.
 
 ### Ícone do app
 
-O ícone vem do `app-icon.svg` oficial da plataforma, copiado **sem edição** para `assets/brand/` (origem, SHA-256 e a regra do manifesto C2PA em `assets/brand/README.md`). O app não importa código da plataforma. O que é desenhado sai da geometria em `src/shared/app-icon-geometry.ts`, que tem uma correção local na gravata. Dessa geometria saem o ícone dentro do app e os dois PNGs de `build/`: `icon.png` no quadro inteiro, para Windows e Linux, e `icon-mac.png` com a margem do grid do macOS, sem sombra. O `electron-builder` gera o `.icns` e o `.ico` a partir deles. Em `npm run dev`, a janela e o Dock usam os mesmos PNGs.
+O ícone vem do `app-icon.svg` oficial da plataforma, copiado **sem edição** para `assets/brand/` (origem, SHA-256 e a regra do manifesto C2PA em `assets/brand/README.md`). O app não importa código da plataforma. O que é desenhado sai da geometria em `src/shared/app-icon-geometry.ts`, que tem uma correção local na gravata. Dessa geometria saem o ícone dentro do app e os PNGs de `build/`:
+- `icon.png`, no quadro inteiro, para o Windows;
+- `icon-mac.png`, com a margem do grid do macOS, sem sombra;
+- `icons/NxN.png`, o mesmo quadro inteiro de `icon.png` em 16, 24, 32, 48, 64, 128, 256 e 512 px, para o Linux. O `deb` instala cada um no tamanho correspondente do tema `hicolor`. Sem essa pasta, o `electron-builder` usaria no Linux o `icon-mac.png`, com a margem.
+
+O `electron-builder` gera o `.icns` e o `.ico` a partir deles. Em `npm run dev`, a janela usa o `icon.png` e o Dock do macOS usa o `icon-mac.png`.
 
 Uma revisão da marca substitui `assets/brand/app-icon.svg` inteiro e atualiza o registro no README dele. Depois, revise a correção da gravata e rode `npm run icons`.
-
-### macOS: app não assinado em outra máquina
-
-Ao copiar o `.app` para outro Mac (por download, AirDrop ou zip), o macOS marca o arquivo como em quarentena e se recusa a abri-lo, dizendo que ele "está danificado". Como o app não é assinado, remova a quarentena antes de abrir:
-
-```sh
-xattr -cr "/caminho/para/Buteco Chat.app"
-```

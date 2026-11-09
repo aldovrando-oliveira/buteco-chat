@@ -7,6 +7,16 @@ e o projeto adota o [Versionamento Semântico](https://semver.org/lang/pt-BR/spe
 
 ## [Unreleased]
 
+### Adicionado
+- Empacotamento para Linux: pacote `deb` com perfil do AppArmor para o
+  sandbox do Chromium no Ubuntu 24.04+, `.desktop` e ícones `hicolor` nos oito
+  tamanhos. **Não verificado num Ubuntu**: só a estrutura do pacote foi
+  conferida.
+- Empacotamento para Windows: pasta `release/win-unpacked/` com
+  `Buteco Chat.exe`, sem instalador. **Não verificado num Windows**.
+- README com geração, abertura, liberação do app não assinado e pasta de dados
+  para macOS, Linux e Windows.
+
 ## [0.1.0] - 2026-11-08
 
 Primeira versão do Buteco Chat: cliente desktop (Electron) para conversar com

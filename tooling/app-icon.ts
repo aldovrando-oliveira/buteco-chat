@@ -20,6 +20,9 @@ const ROOT = join(import.meta.dirname, '..')
 export const SOURCE_PATH = join(ROOT, 'assets/brand/app-icon.svg')
 export const ICON_PATH = join(ROOT, 'build/icon.png')
 export const MAC_ICON_PATH = join(ROOT, 'build/icon-mac.png')
+/** `build.linux.icon`: um PNG por tamanho de `apps` do tema hicolor (empacotamento-linux-windows, D2). */
+export const LINUX_ICONS_DIR = join(ROOT, 'build/icons')
+export const LINUX_ICON_SIZES = [16, 24, 32, 48, 64, 128, 256, 512] as const
 
 export const SIZE = 1024
 /** Grid de ícones do macOS (Big Sur em diante): quadrado de 824 centralizado no quadro de 1024. */
@@ -54,9 +57,17 @@ export function macSvg(): string {
   )
 }
 
-/** Renderiza em 1024 px de largura. */
-export function render(svg: string): { width: number; pixels: Buffer; png: () => Buffer } {
-  const image = new Resvg(svg, { fitTo: { mode: 'width', value: SIZE } }).render()
+/**
+ * Os tamanhos do Linux saem do quadro inteiro, como `build/icon.png`. Sem `linux.icon`, o electron-builder usaria o
+ * `mac.icon`, com a margem do grid do macOS (empacotamento-linux-windows, D2).
+ */
+export function linuxIconSvg(): string {
+  return iconSvg()
+}
+
+/** Renderiza em `size` px de largura (1024 por padrão). */
+export function render(svg: string, size: number = SIZE): { width: number; pixels: Buffer; png: () => Buffer } {
+  const image = new Resvg(svg, { fitTo: { mode: 'width', value: size } }).render()
   return { width: image.width, pixels: image.pixels, png: () => image.asPng() }
 }
 
@@ -64,6 +75,8 @@ export function generateIcons(): void {
   mkdirSync(dirname(ICON_PATH), { recursive: true })
   writeFileSync(ICON_PATH, render(iconSvg()).png())
   writeFileSync(MAC_ICON_PATH, render(macSvg()).png())
+  mkdirSync(LINUX_ICONS_DIR, { recursive: true })
+  for (const n of LINUX_ICON_SIZES) writeFileSync(join(LINUX_ICONS_DIR, `${n}x${n}.png`), render(linuxIconSvg(), n).png())
 }
 
 if (import.meta.main) generateIcons()

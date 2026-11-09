@@ -6,6 +6,8 @@
   "private": true,
   "main": "./out/main/index.js",
   "author": "Aldovrando Oliveira",
+  "homepage": "https://github.com/aldovrando-oliveira/buteco-chat",
+  "desktopName": "buteco-chat.desktop",
   "license": "UNLICENSED",
   "scripts": {
     "dev": "electron-vite dev",
@@ -56,6 +58,17 @@
     "mac": {
       "identity": null,
       "icon": "build/icon-mac.png",
+      "target": "dir"
+    },
+    "linux": {
+      "target": "deb",
+      "category": "Development",
+      "executableName": "buteco-chat",
+      "maintainer": "Aldovrando Oliveira <aldovrando.oliveira@gmail.com>",
+      "syncDesktopName": true,
+      "icon": "build/icons"
+    },
+    "win": {
       "target": "dir"
     },
     "publish": null,
